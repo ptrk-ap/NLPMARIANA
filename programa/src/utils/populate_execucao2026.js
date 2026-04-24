@@ -5,12 +5,11 @@
  * cria a tabela execucao2026 se não existir,
  * limpa e reinsere todos os dados.
  *
- * Uso: node populate_execucao2026.js
+ * Uso: const { populateExecucao2026 } = require('./populate_execucao2026');
  */
 
 require("dotenv").config();
 const https = require("https");
-const readline = require("readline");
 const knex = require("../database/connection");
 const { parse } = require("csv-parse/sync");
 const iconv = require("iconv-lite");
@@ -22,26 +21,6 @@ const CONSULTA_ID = "012357";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Pergunta algo no terminal (com suporte a input oculto para senhas).
- */
-function perguntar(mensagem) {
-  return new Promise((resolve) => {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-
-    rl.question(mensagem, (resposta) => {
-      rl.close();
-      resolve(resposta.trim());
-    });
-  });
-}
-
-/**
- * Faz uma requisição HTTPS e retorna { statusCode, body }.
- */
 function request(options, body = null) {
   return new Promise((resolve, reject) => {
     const req = https.request(options, (res) => {
@@ -96,7 +75,7 @@ async function buscarCSV(token) {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      "Content-Length": 2, // '{}'
+      "Content-Length": 2,
       "User-Agent": "Mozilla/5.0 (compatible; populate_execucao2026/1.0)",
     },
   };
@@ -106,16 +85,13 @@ async function buscarCSV(token) {
   if (statusCode === 204) throw new Error("API retornou 204 — nenhum conteúdo.");
   if (statusCode !== 200) throw new Error(`Erro na consulta. HTTP ${statusCode}: ${body.toString()}`);
 
-  // Tentamos detectar encoding. Se parecer quebrado, o usuário pode ajustar aqui.
-  // Usaremos iconv para garantir que caracteres especiais funcionem se for Latin1/Win1252.
-  return iconv.decode(body, "utf-8"); // Altere para 'win1252' se necessário
+  return iconv.decode(body, "utf-8");
 }
 
 // ─── Transformações ───────────────────────────────────────────────────────────
 
 function converterDecimal(valor) {
   if (!valor || valor.trim() === "" || valor.trim() === "-") return null;
-  // Remove pontos de milhar e troca vírgula decimal por ponto
   const formatado = valor.trim().replace(/\./g, "").replace(",", ".");
   const num = parseFloat(formatado);
   return isNaN(num) ? null : num;
@@ -163,40 +139,41 @@ async function setupDatabase() {
   console.log("Verificando estrutura do banco de dados...");
 
   const hasTable = await knex.schema.hasTable("execucao2026");
+
   if (!hasTable) {
     await knex.schema.createTable("execucao2026", (table) => {
       table.increments("id").primary();
-      table.string("poder");
-      table.string("unidade_gestora");
-      table.string("unidade_orcamentaria");
-      table.string("eixo");
-      table.string("programa");
-      table.string("ods");
-      table.string("acao");
-      table.string("funcao");
-      table.string("fonte");
-      table.string("grupo_despesa");
-      table.string("categoria_despesa");
-      table.string("elemento_despesa");
-      table.string("emenda");
-      table.string("natureza_despesa");
-      table.string("convenio_despesa");
-      table.string("convenio_receita");
-      table.string("contrato");
-      table.string("credor");
+      table.string("poder", 200);
+      table.string("unidade_gestora", 200);
+      table.string("unidade_orcamentaria", 200);
+      table.string("eixo", 200);
+      table.string("programa", 200);
+      table.string("ods", 200);
+      table.string("acao", 1000);
+      table.string("funcao", 200);
+      table.string("fonte", 200);
+      table.string("grupo_despesa", 200);
+      table.string("categoria_despesa", 200);
+      table.string("elemento_despesa", 200);
+      table.string("emenda", 2000);
+      table.string("natureza_despesa", 200);
+      table.string("convenio_despesa", 1000);
+      table.string("convenio_receita", 1000);
+      table.string("contrato", 2000);
+      table.string("credor", 200);
       table.date("ordem_bancaria");
-      table.decimal("dotacao_inicial", 18, 2);
-      table.decimal("despesas_empenhadas", 18, 2);
-      table.decimal("despesas_liquidadas", 18, 2);
-      table.decimal("despesas_pagas", 18, 2);
-      table.decimal("despesas_exercicio_pagas", 18, 2);
+      table.decimal("dotacao_inicial", 20, 4);
+      table.decimal("despesas_empenhadas", 20, 4);
+      table.decimal("despesas_liquidadas", 20, 4);
+      table.decimal("despesas_pagas", 20, 4);
+      table.decimal("despesas_exercicio_pagas", 20, 4);
     });
+
     console.log("✔ Tabela 'execucao2026' criada.");
   } else {
     console.log("✔ Tabela 'execucao2026' já existe.");
   }
 
-  // Limpa os dados
   await knex("execucao2026").truncate();
   console.log("✔ Tabela truncada.");
 }
@@ -215,63 +192,54 @@ async function salvarNoBanco(linhas) {
   console.log(`\n✔ Inserção concluída: ${inseridos} linhas.`);
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── Função Principal Exportada ───────────────────────────────────────────────
 
-async function main() {
+async function populateExecucao2026() {
   console.log("=== Importador FlexSiafe AP → execucao2026 ===\n");
 
-  // 1. Pedir credenciais da API
-  const apiUsuario = await perguntar("Usuário da API: ");
-  const apiSenha = await perguntar("Senha da API: ", true);
+  const apiUsuario = process.env.API_USERNAME;
+  const apiSenha = process.env.API_PASSWORD;
 
-  try {
-    // 2. Autenticar
-    console.log("\nAutenticando na API...");
-    const token = await autenticar(apiUsuario, apiSenha);
-    console.log("✔ Token obtido.");
-
-    // 3. Buscar CSV
-    console.log("Buscando dados da consulta 012357...");
-    const csvText = await buscarCSV(token);
-    console.log("✔ CSV recebido.");
-
-    // 4. Parsear CSV
-    console.log("Parseando CSV...");
-    const records = parse(csvText, {
-      delimiter: ";",
-      relax_column_count: true,
-      skip_empty_lines: true,
-      trim: true,
-    });
-
-    if (records.length < 2) throw new Error("CSV vazio ou sem dados.");
-
-    const cabecalho = records[0];
-    console.log(`✔ Colunas detectadas: ${cabecalho.length} | Linhas totais: ${records.length}`);
-
-    // 5. Mapear linhas (pula cabeçalho)
-    const linhasMapeadas = records.slice(1).map((cols, idx) => {
-      try {
-        return mapearLinha(cols);
-      } catch (e) {
-        console.warn(`  Aviso: erro ao mapear linha ${idx + 2}: ${e.message}`);
-        return null;
-      }
-    }).filter(Boolean);
-
-    console.log(`✔ Linhas válidas para inserção: ${linhasMapeadas.length}`);
-
-    // 6. Preparar banco e salvar
-    await setupDatabase();
-    await salvarNoBanco(linhasMapeadas);
-
-    console.log("\n✅ Importação finalizada com sucesso em", new Date().toLocaleString("pt-BR"));
-  } catch (err) {
-    console.error("\n❌ Erro:", err.message);
-    process.exit(1);
-  } finally {
-    await knex.destroy();
+  if (!apiUsuario || !apiSenha) {
+    throw new Error("Credenciais ausentes. Defina API_USERNAME e API_PASSWORD no .env");
   }
+
+  console.log("Autenticando na API...");
+  const token = await autenticar(apiUsuario, apiSenha);
+  console.log("✔ Token obtido.");
+
+  console.log("Buscando dados da consulta 012357...");
+  const csvText = await buscarCSV(token);
+  console.log("✔ CSV recebido.");
+
+  console.log("Parseando CSV...");
+  const records = parse(csvText, {
+    delimiter: ";",
+    relax_column_count: true,
+    skip_empty_lines: true,
+    trim: true,
+  });
+
+  if (records.length < 2) throw new Error("CSV vazio ou sem dados.");
+
+  const cabecalho = records[0];
+  console.log(`✔ Colunas detectadas: ${cabecalho.length} | Linhas totais: ${records.length}`);
+
+  const linhasMapeadas = records.slice(1).map((cols, idx) => {
+    try {
+      return mapearLinha(cols);
+    } catch (e) {
+      console.warn(`  Aviso: erro ao mapear linha ${idx + 2}: ${e.message}`);
+      return null;
+    }
+  }).filter(Boolean);
+
+  console.log(`✔ Linhas válidas para inserção: ${linhasMapeadas.length}`);
+
+  await setupDatabase();
+  await salvarNoBanco(linhasMapeadas);
+
+  console.log("\n✅ Importação finalizada com sucesso em", new Date().toLocaleString("pt-BR"));
 }
 
-main();
+module.exports = { populateExecucao2026 };

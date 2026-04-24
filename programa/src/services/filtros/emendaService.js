@@ -92,7 +92,7 @@ class EmendaService {
             let query = pool("emendas").select("codigo", "descricao");
 
             termosParaBusca.forEach(t => {
-                query = query.whereRaw("(descricao COLLATE utf8mb4_general_ci) LIKE ?", [`%${t}%`]);
+                query = query.whereRaw("descricao ILIKE ?", [`%${t}%`]);
             });
 
             const rows = await query.limit(10);

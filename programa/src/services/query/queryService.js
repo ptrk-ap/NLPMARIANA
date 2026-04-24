@@ -65,7 +65,7 @@ class QueryService {
         
         // Se a query for apenas COUNT ou similar e não tiver columns, garantimos um literal
         const rawSelectList = rawColumns.size > 0 
-            ? Array.from(rawColumns).map(c => `\`${c}\``).join(", ")
+            ? Array.from(rawColumns).map(c => `"${c}"`).join(", ")
             : "1 AS dummy";
 
         // 5.2 Calcula cutoff para o ano corrente (apenas períodos consolidados)
@@ -77,12 +77,12 @@ class QueryService {
         const finalParams = [];
 
         for (const anoLoop of anos) {
-            const tempTable = `\`execucao${anoLoop}\``;
+            const tempTable = `"execucao${anoLoop}"`;
 
             // Aplica cutoff apenas no ano corrente para mostrar só períodos fechados
             if (anoLoop === anoAtual && cutoffAnoAtual) {
                 const separator = whereClause.trim().toUpperCase().startsWith('WHERE') ? 'AND' : 'WHERE';
-                const whereComCutoff = `${whereClause} ${separator} \`ordem_bancaria\` <= ?`;
+                const whereComCutoff = `${whereClause} ${separator} "ordem_bancaria" <= ?`;
                 unionQueries.push(`SELECT ${rawSelectList} FROM ${tempTable} ${whereComCutoff}`);
                 finalParams.push(...baseParams, cutoffAnoAtual);
             } else {
@@ -155,8 +155,8 @@ class QueryService {
      * @returns {Promise<Array>} - Array de linhas retornadas.
      */
     async executar(sql, params) {
-        const [rows] = await knex.raw(sql, params);
-        return rows;
+        const result = await knex.raw(sql, params);
+        return result.rows;
     }
 }
 

@@ -1,7 +1,7 @@
 const { ENTITY_COLUMNS, ORDER_PRIORITY } = require("./QueryConfig");
 
 function quoteIdent(name) {
-    return `\`${name}\``;
+    return `"${name}"`;
 }
 
 /**
@@ -15,20 +15,20 @@ function buildSelectAndGroupBy(entidadesFinais, valoresSolicitados) {
         if (!entidadesFinais.has(entidade)) continue;
 
         if (entidade === "agrupamento_mensal") {
-            selectParts.push(`MONTH(ordem_bancaria) AS mes`);
+            selectParts.push(`EXTRACT(MONTH FROM ordem_bancaria)::int AS mes`);
             groupByParts.push(`mes`);
         } else if (entidade === "agrupamento_bimestral") {
-            selectParts.push(`CEIL(MONTH(ordem_bancaria) / 2) AS bimestre`);
+            selectParts.push(`CEIL(EXTRACT(MONTH FROM ordem_bancaria) / 2.0)::int AS bimestre`);
             groupByParts.push(`bimestre`);
         } else if (entidade === "agrupamento_trimestral") {
-            selectParts.push(`QUARTER(ordem_bancaria) AS trimestre`);
+            selectParts.push(`CEIL(EXTRACT(MONTH FROM ordem_bancaria) / 3.0)::int AS trimestre`);
             groupByParts.push(`trimestre`);
         } else if (entidade === "agrupamento_semestral") {
-            selectParts.push(`CASE WHEN MONTH(ordem_bancaria) <= 6 THEN 1 ELSE 2 END AS semestre`);
+            selectParts.push(`CASE WHEN EXTRACT(MONTH FROM ordem_bancaria) <= 6 THEN 1 ELSE 2 END AS semestre`);
             groupByParts.push(`semestre`);
         } else if (entidade === "agrupamento_diario") {
-            selectParts.push(`DATE_FORMAT(ordem_bancaria, '%d/%m/%Y') AS dia`);
-            groupByParts.push(`DATE(ordem_bancaria)`);
+            selectParts.push(`TO_CHAR(ordem_bancaria, 'DD/MM/YYYY') AS dia`);
+            groupByParts.push(`ordem_bancaria::date`);
             groupByParts.push(`dia`);
         } else if (entidade !== "ordem_bancaria") {
             selectParts.push(quoteIdent(entidade));
@@ -66,13 +66,13 @@ function buildWhere(hierarquicos, independentes, filtrosEncontrados) {
             const partesEntidade = [];
             
             if (incluir.length > 0) {
-                const likes = incluir.map(() => `${quoteIdent(entidade)} LIKE ?`).join(" OR ");
+                const likes = incluir.map(() => `${quoteIdent(entidade)} ILIKE ?`).join(" OR ");
                 partesEntidade.push(`(${likes})`);
                 params.push(...incluir.map(v => `${v.valor}%`));
             }
             
             if (excluir.length > 0) {
-                const notLikes = excluir.map(() => `${quoteIdent(entidade)} NOT LIKE ?`).join(" AND ");
+                const notLikes = excluir.map(() => `${quoteIdent(entidade)} NOT ILIKE ?`).join(" AND ");
                 partesEntidade.push(`(${notLikes})`);
                 params.push(...excluir.map(v => `${v.valor}%`));
             }
@@ -92,12 +92,12 @@ function buildWhere(hierarquicos, independentes, filtrosEncontrados) {
             const excluir = valores.filter(v => v.excluir);
             
             if (incluir.length > 0) {
-                const likes = incluir.map(() => `${quoteIdent(entidade)} COLLATE utf8mb4_general_ci LIKE ?`).join(" OR ");
+                const likes = incluir.map(() => `${quoteIdent(entidade)} ILIKE ?`).join(" OR ");
                 partesIndependentes.push(`(${likes})`);
                 params.push(...incluir.map(v => `%${v.valor}%`));
             }
             if (excluir.length > 0) {
-                const notLikes = excluir.map(() => `${quoteIdent(entidade)} COLLATE utf8mb4_general_ci NOT LIKE ?`).join(" AND ");
+                const notLikes = excluir.map(() => `${quoteIdent(entidade)} NOT ILIKE ?`).join(" AND ");
                 partesIndependentes.push(`(${notLikes})`);
                 params.push(...excluir.map(v => `%${v.valor}%`));
             }
@@ -109,10 +109,10 @@ function buildWhere(hierarquicos, independentes, filtrosEncontrados) {
 
             for (const p of arrOriginal) {
                 if (p.excluir) {
-                    excludeBlocks.push(`\`ordem_bancaria\` NOT BETWEEN ? AND ?`);
+                    excludeBlocks.push(`"ordem_bancaria" NOT BETWEEN ? AND ?`);
                     params.push(p.data_inicio, p.data_fim);
                 } else {
-                    dateBlocks.push(`\`ordem_bancaria\` BETWEEN ? AND ?`);
+                    dateBlocks.push(`"ordem_bancaria" BETWEEN ? AND ?`);
                     params.push(p.data_inicio, p.data_fim);
                 }
             }
@@ -129,12 +129,12 @@ function buildWhere(hierarquicos, independentes, filtrosEncontrados) {
             const excluir = valores.filter(v => v.excluir);
             
             if (incluir.length > 0) {
-                const likes = incluir.map(() => `${quoteIdent(entidade)} LIKE ?`).join(" OR ");
+                const likes = incluir.map(() => `${quoteIdent(entidade)} ILIKE ?`).join(" OR ");
                 partesIndependentes.push(`(${likes})`);
                 params.push(...incluir.map(v => `${v.valor}%`));
             }
             if (excluir.length > 0) {
-                const notLikes = excluir.map(() => `${quoteIdent(entidade)} NOT LIKE ?`).join(" AND ");
+                const notLikes = excluir.map(() => `${quoteIdent(entidade)} NOT ILIKE ?`).join(" AND ");
                 partesIndependentes.push(`(${notLikes})`);
                 params.push(...excluir.map(v => `${v.valor}%`));
             }
@@ -162,42 +162,42 @@ function buildOrderBy(entidadesFinais, selectParts) {
 
     if (entidadesFinais.has("credor")) {
         const camposDisponiveis = ORDER_PRIORITY.filter(campo =>
-            selectParts.some(p => p.includes(`AS \`${campo}\``))
+            selectParts.some(p => p.includes(`AS "${campo}"`))
         );
 
         if (camposDisponiveis.length > 0) {
-            orderClause = `ORDER BY ${camposDisponiveis.map(c => `\`${c}\` DESC`).join(", ")}`;
+            orderClause = `ORDER BY ${camposDisponiveis.map(c => `"${c}" DESC`).join(", ")}`;
         }
     }
 
     if (entidadesFinais.has("agrupamento_mensal")) {
         orderClause = orderClause
-            ? `${orderClause}, \`mes\` ASC`
-            : `ORDER BY \`mes\` ASC`;
+            ? `${orderClause}, "mes" ASC`
+            : `ORDER BY "mes" ASC`;
     }
 
     if (entidadesFinais.has("agrupamento_bimestral")) {
         orderClause = orderClause
-            ? `${orderClause}, \`bimestre\` ASC`
-            : `ORDER BY \`bimestre\` ASC`;
+            ? `${orderClause}, "bimestre" ASC`
+            : `ORDER BY "bimestre" ASC`;
     }
 
     if (entidadesFinais.has("agrupamento_trimestral")) {
         orderClause = orderClause
-            ? `${orderClause}, \`trimestre\` ASC`
-            : `ORDER BY \`trimestre\` ASC`;
+            ? `${orderClause}, "trimestre" ASC`
+            : `ORDER BY "trimestre" ASC`;
     }
 
     if (entidadesFinais.has("agrupamento_semestral")) {
         orderClause = orderClause
-            ? `${orderClause}, \`semestre\` ASC`
-            : `ORDER BY \`semestre\` ASC`;
+            ? `${orderClause}, "semestre" ASC`
+            : `ORDER BY "semestre" ASC`;
     }
 
     if (entidadesFinais.has("agrupamento_diario")) {
         orderClause = orderClause
-            ? `${orderClause}, DATE(ordem_bancaria) ASC`
-            : `ORDER BY DATE(ordem_bancaria) ASC`;
+            ? `${orderClause}, ordem_bancaria::date ASC`
+            : `ORDER BY ordem_bancaria::date ASC`;
     }
 
     return orderClause;

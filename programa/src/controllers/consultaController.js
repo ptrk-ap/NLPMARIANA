@@ -17,6 +17,11 @@ async function consulta(req, res, next) {
             erro: "Campo 'frase' é obrigatório"
         });
     }
+    if (consultaFrase.length > 200) {
+        return res.status(400).json({
+            erro: "Frase muito longa, por favor, reduza o tamanho da frase até 200 caracteres"
+        });
+    }
 
     try {
         // 1. Traduz termos naturais para termos SQL (ex: "unidade gestora" → "unidade_gestora")
