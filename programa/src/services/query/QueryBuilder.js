@@ -7,7 +7,7 @@ function quoteIdent(name) {
 /**
  * Monta as partes do SELECT e GROUP BY com base nas entidades e valores solicitados.
  */
-function buildSelectAndGroupBy(entidadesFinais, valoresSolicitados) {
+function buildSelectAndGroupBy(entidadesFinais, valoresSolicitados, dataReferencia = "ordem_bancaria") {
     const selectParts = [];
     const groupByParts = [];
 
@@ -15,22 +15,22 @@ function buildSelectAndGroupBy(entidadesFinais, valoresSolicitados) {
         if (!entidadesFinais.has(entidade)) continue;
 
         if (entidade === "agrupamento_mensal") {
-            selectParts.push(`EXTRACT(MONTH FROM ordem_bancaria)::int AS mes`);
+            selectParts.push(`EXTRACT(MONTH FROM ${dataReferencia})::int AS mes`);
             groupByParts.push(`mes`);
         } else if (entidade === "agrupamento_bimestral") {
-            selectParts.push(`CEIL(EXTRACT(MONTH FROM ordem_bancaria) / 2.0)::int AS bimestre`);
+            selectParts.push(`CEIL(EXTRACT(MONTH FROM ${dataReferencia}) / 2.0)::int AS bimestre`);
             groupByParts.push(`bimestre`);
         } else if (entidade === "agrupamento_trimestral") {
-            selectParts.push(`CEIL(EXTRACT(MONTH FROM ordem_bancaria) / 3.0)::int AS trimestre`);
+            selectParts.push(`CEIL(EXTRACT(MONTH FROM ${dataReferencia}) / 3.0)::int AS trimestre`);
             groupByParts.push(`trimestre`);
         } else if (entidade === "agrupamento_semestral") {
-            selectParts.push(`CASE WHEN EXTRACT(MONTH FROM ordem_bancaria) <= 6 THEN 1 ELSE 2 END AS semestre`);
+            selectParts.push(`CASE WHEN EXTRACT(MONTH FROM ${dataReferencia}) <= 6 THEN 1 ELSE 2 END AS semestre`);
             groupByParts.push(`semestre`);
         } else if (entidade === "agrupamento_diario") {
-            selectParts.push(`TO_CHAR(ordem_bancaria, 'DD/MM/YYYY') AS dia`);
-            groupByParts.push(`ordem_bancaria::date`);
+            selectParts.push(`TO_CHAR(${dataReferencia}, 'DD/MM/YYYY') AS dia`);
+            groupByParts.push(`${dataReferencia}::date`);
             groupByParts.push(`dia`);
-        } else if (entidade !== "ordem_bancaria") {
+        } else if (entidade !== "ordem_bancaria" && entidade !== "nota_empenho" && entidade !== "nota_liquidacao") {
             selectParts.push(quoteIdent(entidade));
             groupByParts.push(quoteIdent(entidade));
         }
@@ -49,7 +49,7 @@ function buildSelectAndGroupBy(entidadesFinais, valoresSolicitados) {
  * Monta a cláusula WHERE a partir dos blocos hierárquicos e independentes.
  * Retorna { whereClause, params }.
  */
-function buildWhere(hierarquicos, independentes, filtrosEncontrados) {
+function buildWhere(hierarquicos, independentes, filtrosEncontrados, dataReferencia = "ordem_bancaria") {
     const params = [];
     const blocosHierarquicos = [];
     const partesIndependentes = [];
@@ -102,17 +102,18 @@ function buildWhere(hierarquicos, independentes, filtrosEncontrados) {
                 params.push(...excluir.map(v => `%${v.valor}%`));
             }
 
-        } else if (entidade === "ordem_bancaria") {
+        } else if (entidade === "ordem_bancaria" || entidade === "nota_empenho" || entidade === "nota_liquidacao") {
             const dateBlocks = [];
             const excludeBlocks = [];
             const arrOriginal = filtrosEncontrados[entidade] || [];
 
             for (const p of arrOriginal) {
+                // Se o filtro vier como uma dessas colunas de data, aplicamos na dataReferencia calculada
                 if (p.excluir) {
-                    excludeBlocks.push(`"ordem_bancaria" NOT BETWEEN ? AND ?`);
+                    excludeBlocks.push(`${dataReferencia} NOT BETWEEN ? AND ?`);
                     params.push(p.data_inicio, p.data_fim);
                 } else {
-                    dateBlocks.push(`"ordem_bancaria" BETWEEN ? AND ?`);
+                    dateBlocks.push(`${dataReferencia} BETWEEN ? AND ?`);
                     params.push(p.data_inicio, p.data_fim);
                 }
             }
@@ -157,7 +158,7 @@ function buildWhere(hierarquicos, independentes, filtrosEncontrados) {
 /**
  * Monta a cláusula ORDER BY com base nas entidades finais e campos do SELECT.
  */
-function buildOrderBy(entidadesFinais, selectParts) {
+function buildOrderBy(entidadesFinais, selectParts, dataReferencia = "ordem_bancaria") {
     let orderClause = "";
 
     if (entidadesFinais.has("credor")) {
@@ -196,8 +197,8 @@ function buildOrderBy(entidadesFinais, selectParts) {
 
     if (entidadesFinais.has("agrupamento_diario")) {
         orderClause = orderClause
-            ? `${orderClause}, ordem_bancaria::date ASC`
-            : `ORDER BY ordem_bancaria::date ASC`;
+            ? `${orderClause}, ${dataReferencia}::date ASC`
+            : `ORDER BY ${dataReferencia}::date ASC`;
     }
 
     return orderClause;

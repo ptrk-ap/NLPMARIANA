@@ -1,4 +1,5 @@
 require("dotenv").config();
+
 const knex = require("knex")({
   client: "pg",
   connection: {
@@ -7,6 +8,24 @@ const knex = require("knex")({
   },
   pool: { min: 0, max: 10 }
 });
+
+/*
+const knex = require("knex")({
+  client: "pg",
+  connection: {
+    host: "127.0.0.1",
+    port: 5432,
+    user: "postgres",
+    password: "1234",
+    database: "siafic"
+  },
+  pool: { min: 0, max: 10 }
+});
+
+
+
+
+*/
 
 
 module.exports = knex;

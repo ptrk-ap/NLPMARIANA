@@ -62,6 +62,7 @@ async function consulta(req, res, next) {
         // 8. Monta e executa a query
         const { sql, params } = queryService.buildQuery(parametrosEncontrados, filtros, anosQuery);
 
+
         const rows = await queryService.executar(sql, params);
 
         // 9. Formata os valores monetários e o credor

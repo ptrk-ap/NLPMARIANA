@@ -11,7 +11,8 @@ function toEntityValues(arr = [], entidade = "") {
         if (i == null) continue;
 
         // Specially handle date range filters
-        if (entidade === "ordem_bancaria" && i.data_inicio && i.data_fim) {
+        const isDateField = ["ordem_bancaria", "nota_empenho", "nota_liquidacao"].includes(entidade);
+        if (isDateField && i.data_inicio && i.data_fim) {
             result.push({ ...i });
             continue;
         }

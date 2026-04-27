@@ -39,9 +39,10 @@ class QueryService {
         const { hierarquicos, independentes } = separateFiltros(filtrosValidos);
 
         // 5. Montagem das cláusulas SQL
-        const { selectParts, groupByParts } = buildSelectAndGroupBy(entidadesFinais, valoresSolicitados);
-        const { whereClause, params: baseParams } = buildWhere(hierarquicos, independentes, filtrosEncontrados);
-        const orderClause = buildOrderBy(entidadesFinais, selectParts);
+        const dataReferencia = this._getDataReferencia(valoresSolicitados);
+        const { selectParts, groupByParts } = buildSelectAndGroupBy(entidadesFinais, valoresSolicitados, dataReferencia);
+        const { whereClause, params: baseParams } = buildWhere(hierarquicos, independentes, filtrosEncontrados, dataReferencia);
+        const orderClause = buildOrderBy(entidadesFinais, selectParts, dataReferencia);
 
         // 5.1 Prepara listagem bruta para as subqueries do formato UNION
         const rawColumns = new Set();
@@ -54,7 +55,15 @@ class QueryService {
         ]);
         for (const entidade of entidadesFinais) {
             if (AGRUPAMENTOS_PERIODICOS.has(entidade)) {
-                rawColumns.add("ordem_bancaria");
+                // Adiciona as colunas necessárias para a data de referência
+                if (dataReferencia.includes("COALESCE")) {
+                    rawColumns.add("ordem_bancaria");
+                    rawColumns.add("nota_liquidacao");
+                    rawColumns.add("nota_empenho");
+                } else {
+                    // Remove aspas se houver (ex: "nota_empenho" -> nota_empenho)
+                    rawColumns.add(dataReferencia.replace(/"/g, ''));
+                }
             } else {
                 rawColumns.add(entidade);
             }
@@ -70,7 +79,7 @@ class QueryService {
 
         // 5.2 Calcula cutoff para o ano corrente (apenas períodos consolidados)
         const anoAtual = new Date().getFullYear();
-        const cutoffAnoAtual = this._calcularCutoffAnoAtual(entidadesFinais);
+        const cutoffAnoAtual = this._calcularCutoffAnoAtual(entidadesFinais, dataReferencia);
 
         // 5.3 Monta o UNION iterando os anos
         const unionQueries = [];
@@ -82,7 +91,7 @@ class QueryService {
             // Aplica cutoff apenas no ano corrente para mostrar só períodos fechados
             if (anoLoop === anoAtual && cutoffAnoAtual) {
                 const separator = whereClause.trim().toUpperCase().startsWith('WHERE') ? 'AND' : 'WHERE';
-                const whereComCutoff = `${whereClause} ${separator} "ordem_bancaria" <= ?`;
+                const whereComCutoff = `${whereClause} ${separator} ${dataReferencia} <= ?`;
                 unionQueries.push(`SELECT ${rawSelectList} FROM ${tempTable} ${whereComCutoff}`);
                 finalParams.push(...baseParams, cutoffAnoAtual);
             } else {
@@ -113,9 +122,10 @@ class QueryService {
      * quando se agrupa por mês, bimestre, trimestre ou semestre.
      * 
      * @param {Set<string>} entidadesFinais 
+     * @param {string} dataReferencia
      * @returns {string|null} - Data no formato YYYY-MM-DD ou null.
      */
-    _calcularCutoffAnoAtual(entidadesFinais) {
+    _calcularCutoffAnoAtual(entidadesFinais, dataReferencia = "ordem_bancaria") {
         const hoje = new Date();
         const ano = hoje.getFullYear();
         const mes = hoje.getMonth(); // 0-11
@@ -145,6 +155,28 @@ class QueryService {
 
         // Sem agrupamento periódico, retorna hoje (sem restrição de período fechado)
         return hoje.toISOString().split('T')[0];
+    }
+
+    /**
+     * Determina qual coluna de data usar como referência com base nos valores solicitados.
+     */
+    _getDataReferencia(valoresSolicitados) {
+        const hasEmpenhada = valoresSolicitados.includes('despesas_empenhadas');
+        const hasLiquidada = valoresSolicitados.includes('despesas_liquidadas');
+        const hasPaga = valoresSolicitados.includes('despesas_pagas') || valoresSolicitados.includes('despesas_exercicio_pagas');
+
+        if (hasEmpenhada && !hasLiquidada && !hasPaga) {
+            return '"nota_empenho"';
+        }
+        if (!hasEmpenhada && hasLiquidada && !hasPaga) {
+            return '"nota_liquidacao"';
+        }
+        if (!hasEmpenhada && !hasLiquidada && hasPaga) {
+            return '"ordem_bancaria"';
+        }
+
+        // Se envolver mais de um item (ou nenhum específico), usa o COALESCE conforme solicitado (ambos)
+        return 'COALESCE("ordem_bancaria", "nota_liquidacao", "nota_empenho")';
     }
 
     /**

@@ -1,11 +1,5 @@
 /**
  * populate_execucao2026.js
- *
- * Busca CSV da API FlexSiafe AP (consulta 012357),
- * cria a tabela execucao2026 se não existir,
- * limpa e reinsere todos os dados.
- *
- * Uso: const { populateExecucao2026 } = require('./populate_execucao2026');
  */
 
 require("dotenv").config();
@@ -124,12 +118,17 @@ function mapearLinha(cols) {
     convenio_receita: cols[15] || null,
     contrato: cols[16] || null,
     credor: cols[17] || null,
-    ordem_bancaria: converterData(cols[18]),
-    dotacao_inicial: converterDecimal(cols[19]),
-    despesas_empenhadas: converterDecimal(cols[20]),
-    despesas_liquidadas: converterDecimal(cols[21]),
-    despesas_pagas: converterDecimal(cols[22]),
-    despesas_exercicio_pagas: converterDecimal(cols[23]),
+
+    // NOVOS CAMPOS (adicionados)
+    nota_empenho: converterData(cols[18]),
+    nota_liquidacao: converterData(cols[19]),
+
+    ordem_bancaria: converterData(cols[20]),
+    dotacao_inicial: converterDecimal(cols[21]),
+    despesas_empenhadas: converterDecimal(cols[22]),
+    despesas_liquidadas: converterDecimal(cols[23]),
+    despesas_pagas: converterDecimal(cols[24]),
+    despesas_exercicio_pagas: converterDecimal(cols[25]),
   };
 }
 
@@ -161,6 +160,11 @@ async function setupDatabase() {
       table.string("convenio_receita", 1000);
       table.string("contrato", 2000);
       table.string("credor", 200);
+
+      // NOVOS CAMPOS (adicionados)
+      table.date("nota_empenho");
+      table.date("nota_liquidacao");
+
       table.date("ordem_bancaria");
       table.decimal("dotacao_inicial", 20, 4);
       table.decimal("despesas_empenhadas", 20, 4);
@@ -190,6 +194,19 @@ async function salvarNoBanco(linhas) {
   }
 
   console.log(`\n✔ Inserção concluída: ${inseridos} linhas.`);
+}
+
+async function excluirTabelaExecucao2026() {
+  console.log("Excluindo tabela 'execucao2026'...");
+  const hasTable = await knex.schema.hasTable("execucao2026");
+  if (hasTable) {
+    await knex.schema.dropTable("execucao2026");
+    console.log("✔ Tabela 'execucao2026' excluída.");
+    return { success: true, message: "Tabela excluída com sucesso." };
+  } else {
+    console.log("✔ Tabela 'execucao2026' não existe.");
+    return { success: true, message: "A tabela não existia." };
+  }
 }
 
 // ─── Função Principal Exportada ───────────────────────────────────────────────
@@ -242,4 +259,4 @@ async function populateExecucao2026() {
   console.log("\n✅ Importação finalizada com sucesso em", new Date().toLocaleString("pt-BR"));
 }
 
-module.exports = { populateExecucao2026 };
+module.exports = { populateExecucao2026, excluirTabelaExecucao2026 };

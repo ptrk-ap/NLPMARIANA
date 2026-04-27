@@ -1,7 +1,7 @@
 const { populateContratos } = require("../utils/populate_contratos");
 const { populateCredores } = require("../utils/populate_credores");
 const { populateEmendas } = require("../utils/populate_emendas");
-const { populateExecucao2026 } = require("../utils/populate_execucao2026");
+const { populateExecucao2026, excluirTabelaExecucao2026 } = require("../utils/populate_execucao2026");
 
 const adminController = {
   async populateBase(req, res) {
@@ -53,6 +53,31 @@ const adminController = {
       console.error("Erro ao carregar exercício atual:", error);
       return res.status(500).json({
         error: "Ocorreu um erro ao processar o carregamento do exercício atual.",
+        message: error.message
+      });
+    }
+  },
+
+  async excluirTabelaExecucao2026(req, res) {
+    const { user, password } = req.body;
+
+    if (user !== process.env.TRIGGER_USERNAME || password !== process.env.TRIGGER_PASSWORD) {
+      return res.status(401).json({ error: "Acesso negado. Credenciais inválidas." });
+    }
+
+    try {
+      console.log("Iniciando exclusão da tabela execucao2026...");
+
+      const resultado = await excluirTabelaExecucao2026();
+
+      return res.status(200).json({
+        message: resultado.message,
+        details: resultado
+      });
+    } catch (error) {
+      console.error("Erro ao excluir tabela execucao2026:", error);
+      return res.status(500).json({
+        error: "Ocorreu um erro ao processar a exclusão da tabela.",
         message: error.message
       });
     }

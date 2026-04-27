@@ -24,6 +24,8 @@ const ENTITY_COLUMNS = [
     "contrato",
     "credor",
     "ordem_bancaria",
+    "nota_empenho",
+    "nota_liquidacao",
     "agrupamento_mensal",
     "agrupamento_bimestral",
     "agrupamento_trimestral",
