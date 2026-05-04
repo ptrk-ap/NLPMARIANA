@@ -1,4 +1,3 @@
-
 const OrcamentoService = require("../services/entidades/OrcamentoService");
 const ExtratorTermosService = require("../services/entidades/ExtratorTermosService");
 const Splitservice = require("../services/entidades/splitService");
@@ -62,21 +61,22 @@ async function consulta(req, res, next) {
         // 8. Monta e executa a query
         const { sql, params } = queryService.buildQuery(parametrosEncontrados, filtros, anosQuery);
 
-
         const rows = await queryService.executar(sql, params);
 
         // 9. Formata os valores monetários e o credor
         const resultadoFormatado = FormatterService.formatarResultado(rows);
 
-        // 10. Monta a resposta
+        // 10. Monta a mensagem de período
         let mensagemFinal = FormatterService.formatarMensagemPeriodo(filtros, anosQuery);
         if (avisoAno) {
             mensagemFinal += `\n${avisoAno}`;
         }
 
+        // 11. Formata a resposta completa para WhatsApp
+        const textoWhatsapp = FormatterService.formatarParaWhatsapp(mensagemFinal, resultadoFormatado);
+
         return res.json({
-            mensagem: mensagemFinal,
-            resultado: resultadoFormatado
+            whatsapp: textoWhatsapp
         });
 
     } catch (err) {

@@ -10,6 +10,13 @@ const knex = require("knex")({
 });
 
 /*
+
+
+*/
+
+
+
+/*
 const knex = require("knex")({
   client: "pg",
   connection: {
@@ -23,9 +30,10 @@ const knex = require("knex")({
 });
 
 
-
-
 */
+
+
+
 
 
 module.exports = knex;
