@@ -1,5 +1,4 @@
 require("dotenv").config();
-
 const knex = require("knex")({
   client: "pg",
   connection: {
@@ -9,13 +8,18 @@ const knex = require("knex")({
   pool: { min: 0, max: 10 }
 });
 
-/*
+// Teste de conexão imediato para facilitar o diagnóstico
+knex.raw("SELECT 1")
+  .then(() => {
+    console.log("✅ Conexão com o banco de dados estabelecida com sucesso.");
+  })
+  .catch((err) => {
+    console.error("❌ Erro ao conectar ao banco de dados:");
+    console.error(`   Motivo: ${err.message}`);
+    console.error("   Verifique se o PostgreSQL está rodando e se as credenciais em 'connection.js' estão corretas.");
+  });
 
-
-*/
-
-
-
+module.exports = knex;
 /*
 const knex = require("knex")({
   client: "pg",
@@ -31,11 +35,3 @@ const knex = require("knex")({
 
 
 */
-
-
-
-
-
-module.exports = knex;
-
-

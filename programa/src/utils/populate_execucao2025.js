@@ -1,5 +1,5 @@
 /**
- * populate_execucao2026.js
+ * populate_execucao2025.js
  */
 
 require("dotenv").config();
@@ -13,10 +13,10 @@ const { request, jsonRequest } = require("./httpHelper");
 const API_BASE = "https://siplag.ap.gov.br/FlexSiafeAP/api";
 
 const CONSULTAS = {
-  "012431": "2026DI",
-  "012432": "2026NE",
-  "012433": "2026NL",
-  "012434": "2026OB",
+  "012430": "2025DI",
+  "012418": "2025NE",
+  "012429": "2025NL",
+  "012023": "2025OB",
 };
 
 // ─── Debug ────────────────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ async function autenticar(usuario, senha) {
     headers: {
       "Content-Type": "application/json",
       "Content-Length": Buffer.byteLength(payload),
-      "User-Agent": "Mozilla/5.0 (compatible; populate_execucao2026/1.0)",
+      "User-Agent": "Mozilla/5.0 (compatible; populate_execucao2025/1.0)",
     },
   };
 
@@ -71,7 +71,7 @@ async function buscarCSV(token, consultaId) {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
       "Content-Length": 2,
-      "User-Agent": "Mozilla/5.0 (compatible; populate_execucao2026/1.0)",
+      "User-Agent": "Mozilla/5.0 (compatible; populate_execucao2025/1.0)",
     },
   };
 
@@ -128,21 +128,21 @@ function mapearCamposComuns(cols) {
 
 // Mapeadores específicos por tabela
 const MAPEADORES = {
-  "2026DI": (cols) => ({
+  "2025DI": (cols) => ({
     ...mapearCamposComuns(cols),
     dotacao_inicial: converterDecimal(cols[18]),
   }),
-  "2026NE": (cols) => ({
+  "2025NE": (cols) => ({
     ...mapearCamposComuns(cols),
     nota_empenho: converterData(cols[18]),
     despesas_empenhadas: converterDecimal(cols[19]),
   }),
-  "2026NL": (cols) => ({
+  "2025NL": (cols) => ({
     ...mapearCamposComuns(cols),
     nota_liquidacao: converterData(cols[18]),
     despesas_liquidadas: converterDecimal(cols[19]),
   }),
-  "2026OB": (cols) => ({
+  "2025OB": (cols) => ({
     ...mapearCamposComuns(cols),
     ordem_bancaria: converterData(cols[18]),
     despesas_pagas: converterDecimal(cols[19]),
@@ -223,24 +223,24 @@ async function setupTabela(nomeTabela) {
 
   debug("DB", `Criando tabela '${nomeTabela}'...`);
 
-  if (nomeTabela === "2026DI") {
+  if (nomeTabela === "2025DI") {
     await knex.schema.createTable(nomeTabela, (table) => {
       definirColunasComunsNaTabela(table);
       table.decimal("dotacao_inicial", 20, 4);
     });
-  } else if (nomeTabela === "2026NE") {
+  } else if (nomeTabela === "2025NE") {
     await knex.schema.createTable(nomeTabela, (table) => {
       definirColunasComunsNaTabela(table);
       table.date("nota_empenho");
       table.decimal("despesas_empenhadas", 20, 4);
     });
-  } else if (nomeTabela === "2026NL") {
+  } else if (nomeTabela === "2025NL") {
     await knex.schema.createTable(nomeTabela, (table) => {
       definirColunasComunsNaTabela(table);
       table.date("nota_liquidacao");
       table.decimal("despesas_liquidadas", 20, 4);
     });
-  } else if (nomeTabela === "2026OB") {
+  } else if (nomeTabela === "2025OB") {
     await knex.schema.createTable(nomeTabela, (table) => {
       definirColunasComunsNaTabela(table);
       table.date("ordem_bancaria");
@@ -265,14 +265,14 @@ async function salvarNoBanco(nomeTabela, linhas) {
     process.stdout.write(`\r  [INSERT] '${nomeTabela}': ${inseridos}/${linhas.length} linhas inseridas`);
   }
 
-  console.log();
+  console.log(); // quebra de linha após o \r
   debug("INSERT", `Inserção na tabela '${nomeTabela}' concluída.`);
 }
 
 // ─── Função Principal Exportada ───────────────────────────────────────────────
 
-async function populateExecucao2026() {
-  console.log("=== Importador FlexSiafe AP → 2026DI / 2026NE / 2026NL / 2026OB ===\n");
+async function populateExecucao2025() {
+  console.log("=== Importador FlexSiafe AP → 2025DI / 2025NE / 2025NL / 2025OB ===\n");
 
   const apiUsuario = process.env.API_USERNAME;
   const apiSenha = process.env.API_PASSWORD;
@@ -317,4 +317,4 @@ async function populateExecucao2026() {
   }
 }
 
-module.exports = { populateExecucao2026 };
+module.exports = { populateExecucao2025 };

@@ -48,9 +48,29 @@ const ORDER_PRIORITY = [
     "soma_despesas_exercicio_pagas"
 ];
 
+const COLUMN_TO_SUFFIX = {
+    dotacao_inicial: "DI",
+    nota_empenho: "NE",
+    despesas_empenhadas: "NE",
+    nota_liquidacao: "NL",
+    despesas_liquidadas: "NL",
+    ordem_bancaria: "OB",
+    despesas_pagas: "OB",
+    despesas_exercicio_pagas: "OB"
+};
+
+const SUFFIX_TO_DATE_COLUMN = {
+    DI: null, // DI usually doesn't have a specific document date in the same way, but common entity columns exist
+    NE: "nota_empenho",
+    NL: "nota_liquidacao",
+    OB: "ordem_bancaria"
+};
+
 module.exports = {
     HIERARCHY_LEVEL,
     ENTITY_COLUMNS,
     VALUE_COLUMNS,
-    ORDER_PRIORITY
+    ORDER_PRIORITY,
+    COLUMN_TO_SUFFIX,
+    SUFFIX_TO_DATE_COLUMN
 };

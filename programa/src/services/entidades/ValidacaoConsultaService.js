@@ -33,7 +33,7 @@ class ValidacaoConsultaService {
      * Filtros que, sozinhos, não são considerados suficientes para tornar
      * a consulta específica (ex: apenas o ano não é um filtro temático).
      */
-    static FILTROS_INSUFICIENTES = ["ano", "ordem_bancaria"];
+    static FILTROS_INSUFICIENTES = ["ano", "periodo"];
 
     /**
      * Verifica se os parâmetros encontrados na frase contêm ao menos

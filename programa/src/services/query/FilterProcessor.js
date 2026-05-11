@@ -11,7 +11,7 @@ function toEntityValues(arr = [], entidade = "") {
         if (i == null) continue;
 
         // Specially handle date range filters
-        const isDateField = ["ordem_bancaria", "nota_empenho", "nota_liquidacao"].includes(entidade);
+        const isDateField = ["periodo", "ordem_bancaria", "nota_empenho", "nota_liquidacao"].includes(entidade);
         if (isDateField && i.data_inicio && i.data_fim) {
             result.push({ ...i });
             continue;
@@ -42,7 +42,7 @@ function processFiltros(filtrosEncontrados = {}) {
 
     for (const [entidade, arr] of Object.entries(filtrosEncontrados)) {
         if (
-            ENTITY_COLUMNS.includes(entidade) &&
+            (ENTITY_COLUMNS.includes(entidade) || entidade === "periodo") &&
             Array.isArray(arr) &&
             arr.length > 0
         ) {

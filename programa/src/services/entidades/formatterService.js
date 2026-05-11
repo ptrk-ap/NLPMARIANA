@@ -115,8 +115,8 @@ class FormatterService {
     static formatarMensagemPeriodo(filtros, anos) {
         let periodosTexto;
 
-        if (filtros.ordem_bancaria && filtros.ordem_bancaria.length > 0) {
-            periodosTexto = filtros.ordem_bancaria.map(ob => `${ob.data_inicio} a ${ob.data_fim}`);
+        if (filtros.periodo && filtros.periodo.length > 0) {
+            periodosTexto = filtros.periodo.map(p => `${p.data_inicio} a ${p.data_fim}`);
         } else {
             periodosTexto = anos.map(a => `Exercício de ${a}`);
         }

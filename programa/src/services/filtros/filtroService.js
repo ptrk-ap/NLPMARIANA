@@ -26,7 +26,7 @@ class FiltroService {
         // Instanciamos os serviços uma única vez no construtor
         this.services = {
             ano: new AnoService(),
-            ordem_bancaria: new PeriodoService(),
+            periodo: new PeriodoService(),
             unidade_gestora: new UgService(),
             natureza_despesa: new NaturezaService(),
             fonte: new FonteService(),
@@ -108,7 +108,7 @@ class FiltroService {
             console.error("Erro ao extrair [ano] da frase completa:", error);
         }
 
-        // Define o ano base para a extração de ordem bancária
+        // Define o ano base para a extração de período (data)
         const anoFiltro = filtrosEncontrados.ano.length > 0
             ? filtrosEncontrados.ano[0].codigo
             : this.services.ano.getAnoPadrao();
@@ -185,7 +185,7 @@ class FiltroService {
 
                 try {
                     let resultados;
-                    if (entidade === "ordem_bancaria") {
+                    if (entidade === "periodo") {
                         resultados = await service.extrair(trecho, anoFiltro);
                     } else {
                         resultados = await service.extrair(trecho);
@@ -237,9 +237,9 @@ class FiltroService {
         const fraseCompletaParaFallback = (partesFraseOriginal || []).join(" ").toLowerCase();
         const temIntencaoDiaria = /\b(diariamente|por dia|pagamento diario|cada dia|dia a dia)\b/i.test(fraseCompletaParaFallback);
 
-        if (temIntencaoDiaria && filtrosEncontrados.ordem_bancaria.length === 0 && filtrosEncontrados.ano.length === 0) {
-            const periodoPadrao = this.services.ordem_bancaria.getPeriodoCorrente();
-            filtrosEncontrados.ordem_bancaria.push(periodoPadrao);
+        if (temIntencaoDiaria && filtrosEncontrados.periodo.length === 0 && filtrosEncontrados.ano.length === 0) {
+            const periodoPadrao = this.services.periodo.getPeriodoCorrente();
+            filtrosEncontrados.periodo.push(periodoPadrao);
         }
 
         // Remove duplicatas e chaves com arrays vazios
@@ -249,7 +249,7 @@ class FiltroService {
             if (lista.length > 0) {
                 const idsUnicos = new Set();
                 resultadoFinal[entidade] = lista.filter(item => {
-                    if (entidade === "ordem_bancaria") {
+                    if (entidade === "periodo") {
                         const chave = `${item.data_inicio}_${item.data_fim}`;
                         if (idsUnicos.has(chave)) return false;
                         idsUnicos.add(chave);
@@ -288,12 +288,11 @@ class FiltroService {
             filtros.ano.forEach(a => anosSet.add(a.codigo));
         }
 
-        // Também inclui tabelas dos anos cita
-        // dos na ordem bancária
-        if (filtros.ordem_bancaria && filtros.ordem_bancaria.length > 0) {
-            filtros.ordem_bancaria.forEach(ob => {
-                if (ob.data_inicio) anosSet.add(parseInt(ob.data_inicio.substring(0, 4)));
-                if (ob.data_fim) anosSet.add(parseInt(ob.data_fim.substring(0, 4)));
+        // Também inclui tabelas dos anos citados no período
+        if (filtros.periodo && filtros.periodo.length > 0) {
+            filtros.periodo.forEach(p => {
+                if (p.data_inicio) anosSet.add(parseInt(p.data_inicio.substring(0, 4)));
+                if (p.data_fim) anosSet.add(parseInt(p.data_fim.substring(0, 4)));
             });
         }
 
