@@ -290,8 +290,8 @@ class OrcamentoService {
             "diarias militar",
             "diaria militar",
             "diaria para militares",
-            "diarias de militares".
-            "diaras para militares"
+            "diarias de militares",
+            "diarias para militares"
             ],
 
             "Diárias - Civil": [
