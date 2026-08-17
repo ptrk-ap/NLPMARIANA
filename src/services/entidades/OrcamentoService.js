@@ -285,6 +285,18 @@ class OrcamentoService {
                 "anualmente",
                 "anual",
                 "anuais"
+            ],
+            "Diárias - Militar": [
+            "diarias militar",
+            "diaria militar",
+            "diaria para militares",
+            "diarias de militares".
+            "diaras para militares"
+            ],
+
+            "Diárias - Civil": [
+            "diarias",
+            "diaria"
             ]
         };
 
