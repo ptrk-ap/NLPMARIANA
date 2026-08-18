@@ -35,18 +35,22 @@ async function populateEmendas() {
 
     // 1. Buscar dados com segurança
     console.log("Buscando valores distintos de emenda...");
+    const tabelas = [
 
-    const rows2024 = await buscarEmendasTabela("execucao2024");
-    const rows2025 = await buscarEmendasTabela("execucao2025");
-    const rows2026 = await buscarEmendasTabela("execucao2026");
+        "2025DI", "2025NE", "2025NL", "2025OB",
+        "2026DI", "2026NE", "2026NL", "2026OB"
+    ];
 
-    console.log(`  execucao2024: ${rows2024.length} registros distintos`);
-    console.log(`  execucao2025: ${rows2025.length} registros distintos`);
-    console.log(`  execucao2026: ${rows2026.length} registros distintos`);
+    const todosRows = [];
+    for (const tabela of tabelas) {
+        const rows = await buscarEmendasTabela(tabela);
+        console.log(`  ${tabela}: ${rows.length} registros distintos`);
+        todosRows.push(...rows);
+    }
 
     // 2. Combinar e deduplicar
     const valoresBrutos = new Set();
-    [...rows2024, ...rows2025, ...rows2026].forEach(r => {
+    todosRows.forEach(r => {
         if (r.emenda) valoresBrutos.add(r.emenda.trim());
     });
 

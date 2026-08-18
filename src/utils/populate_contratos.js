@@ -32,17 +32,21 @@ async function populateContratos() {
 
     // 2. Busca valores DISTINCT
     console.log("Buscando valores distintos de contrato...");
-    const rows2024 = await buscarContratosTabela("execucao2024");
-    const rows2025 = await buscarContratosTabela("execucao2025");
-    const rows2026 = await buscarContratosTabela("execucao2026");
+    const tabelas = [
+        "2025DI", "2025NE", "2025NL", "2025OB",
+        "2026DI", "2026NE", "2026NL", "2026OB"
+    ];
 
-    console.log(`  execucao2024: ${rows2024.length} registros distintos`);
-    console.log(`  execucao2025: ${rows2025.length} registros distintos`);
-    console.log(`  execucao2026: ${rows2026.length} registros distintos`);
+    const todosRows = [];
+    for (const tabela of tabelas) {
+        const rows = await buscarContratosTabela(tabela);
+        console.log(`  ${tabela}: ${rows.length} registros distintos`);
+        todosRows.push(...rows);
+    }
 
     // 3. Combinar e deduplicar
     const valoresBrutos = new Set();
-    [...rows2024, ...rows2025, ...rows2026].forEach(r => {
+    todosRows.forEach(r => {
         if (r.contrato && r.contrato.trim() && r.contrato.trim() !== "- - -") {
             valoresBrutos.add(r.contrato.trim());
         }

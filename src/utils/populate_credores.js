@@ -6,14 +6,14 @@ async function populateCredores() {
 
     // 1. Criar tabela se não existir (PostgreSQL)
     await knex.raw(`
-        CREATE TABLE IF NOT EXISTS credores (
+        CREATE TABLE IF NOT EXISTS credor (
             id SERIAL PRIMARY KEY,
             codigo VARCHAR(50) NOT NULL,
             descricao TEXT,
             UNIQUE (codigo)
         );
     `);
-    console.log("Tabela 'credores' verificada/criada.");
+    console.log("Tabela 'credor' verificada/criada.");
 
     // Função para buscar dados apenas se a tabela existir
     async function buscarCredoresTabela(nomeTabela) {
@@ -32,17 +32,21 @@ async function populateCredores() {
 
     // 2. Busca valores DISTINCT de credor
     console.log("Buscando valores distintos de credor...");
-    const rows2024 = await buscarCredoresTabela("execucao2024");
-    const rows2025 = await buscarCredoresTabela("execucao2025");
-    const rows2026 = await buscarCredoresTabela("execucao2026");
+    const tabelas = [
+        "2025DI", "2025NE", "2025NL", "2025OB",
+        "2026DI", "2026NE", "2026NL", "2026OB"
+    ];
 
-    console.log(`  execucao2024: ${rows2024.length} registros distintos`);
-    console.log(`  execucao2025: ${rows2025.length} registros distintos`);
-    console.log(`  execucao2026: ${rows2026.length} registros distintos`);
+    const todosRows = [];
+    for (const tabela of tabelas) {
+        const rows = await buscarCredoresTabela(tabela);
+        console.log(`  ${tabela}: ${rows.length} registros distintos`);
+        todosRows.push(...rows);
+    }
 
     // 3. Combinar e deduplicar
     const valoresBrutos = new Set();
-    [...rows2024, ...rows2025, ...rows2026].forEach(r => {
+    todosRows.forEach(r => {
         if (r.credor && r.credor.trim() && r.credor.trim() !== "- - -") {
             valoresBrutos.add(r.credor.trim());
         }
@@ -74,7 +78,7 @@ async function populateCredores() {
     console.log(`Registros após deduplicação por código: ${mapaCredores.size}`);
 
     // 6. Verificar existentes no banco
-    const existentesNoBanco = await knex("credores").select("codigo");
+    const existentesNoBanco = await knex("credor").select("codigo");
     const codigosNoBanco = new Set(existentesNoBanco.map(c => c.codigo));
 
     const novos = [];
@@ -94,12 +98,12 @@ async function populateCredores() {
     let inseridos = 0;
     for (let i = 0; i < novos.length; i += BATCH_SIZE) {
         const lote = novos.slice(i, i + BATCH_SIZE);
-        await knex("credores").insert(lote);
+        await knex("credor").insert(lote);
         inseridos += lote.length;
         process.stdout.write(`\r  Inserindo... ${inseridos}/${novos.length}`);
     }
 
-    console.log(`\n\n✅ Concluído! ${inseridos} novos registros inseridos na tabela 'credores'.`);
+    console.log(`\n\n✅ Concluído! ${inseridos} novos registros inseridos na tabela 'credor'.`);
     return { inseridos, total: mapaCredores.size };
 }
 

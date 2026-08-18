@@ -4,7 +4,7 @@ const { populateEmendas } = require("../utils/populate_emendas");
 const { populateExecucao2026, excluirTabelaExecucao2026 } = require("../utils/populate_execucao2026");
 const { populateExecucao2025 } = require("../utils/populate_execucao2025");
 const { populateExecucao2024 } = require("../utils/populate_execucao2024");
-const { testeConsulta010468 } = require("../utils/testeConsulta010468");
+//const { testeConsulta010468 } = require("../utils/testeConsulta010468");
 
 const adminController = {
   async populateBase(req, res) {
