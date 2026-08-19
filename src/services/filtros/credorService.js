@@ -28,6 +28,7 @@ function prepararTermo(text) {
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
         .replace(/Ç/g, "C")
+        .replace(/[^\w\s]/g, "") 
         .trim();
 }
 
