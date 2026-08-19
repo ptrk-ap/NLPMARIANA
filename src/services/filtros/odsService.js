@@ -68,28 +68,31 @@ class OdsService {
     /**
      * Lê o CSV e transforma em objetos
      */
-    carregarCsv(caminho) {
-        const conteudo = fs.readFileSync(caminho, "utf8");
+   carregarCsv(caminho) {
+    const conteudo = fs.readFileSync(caminho, "utf8");
 
-        return conteudo
-            .split(/\r?\n/)
-            .filter(Boolean)
-            .slice(1)
-            .map(linha => {
-                const [codigo, descricao] = linha.split(",");
+    return conteudo
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .slice(1)
+        .map(linha => {
+            const separador = linha.indexOf(",");
 
-                return {
-                    codigo: (codigo || "").trim(),
-                    descricao: (descricao || "").trim()
-                };
-            })
-            .filter(item =>
-                item.codigo &&
-                item.descricao &&
-                item.codigo !== "-" &&
-                item.descricao !== "-"
-            );
-    }
+            const codigo = linha.slice(0, separador);
+            const descricao = linha.slice(separador + 1);
+
+            return {
+                codigo: (codigo || "").trim(),
+                descricao: (descricao || "").trim()
+            };
+        })
+        .filter(item =>
+            item.codigo &&
+            item.descricao &&
+            item.codigo !== "-" &&
+            item.descricao !== "-"
+        );
+}
 
     /**
      * Encontra o menor trecho contíguo da frase original que abrange
