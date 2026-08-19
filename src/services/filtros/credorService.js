@@ -31,9 +31,34 @@ function prepararTermo(text) {
         .trim();
 }
 
+// ===== Controle de inicialização da extensão unaccent =====
+// Garante que o CREATE EXTENSION rode apenas uma vez por ciclo de vida do processo,
+// não a cada chamada de extrair().
+let unaccentReadyPromise = null;
+
+function garantirExtensaoUnaccent() {
+    if (!unaccentReadyPromise) {
+        unaccentReadyPromise = pool.raw("CREATE EXTENSION IF NOT EXISTS unaccent;")
+            .then(() => {
+                console.log("[CredorService] Extensão 'unaccent' verificada/criada com sucesso.");
+            })
+            .catch((err) => {
+                // Se falhar (ex: usuário sem permissão de superuser), loga o erro mas não
+                // derruba a aplicação — a extensão pode já ter sido criada manualmente por um DBA.
+                console.error("[CredorService] Falha ao criar extensão 'unaccent'. Verifique se ela já existe ou se o usuário do banco tem permissão. Erro:", err.message);
+                // Reseta a promise para tentar novamente na próxima chamada, caso o problema seja transitório.
+                unaccentReadyPromise = null;
+            });
+    }
+    return unaccentReadyPromise;
+}
+
 class CredorService {
 
     async extrair(frase) {
+        // Garante que a extensão unaccent esteja disponível antes de qualquer busca textual.
+        await garantirExtensaoUnaccent();
+
         const fraseNormalizada = prepararTermo(frase);
 
 
@@ -91,7 +116,7 @@ class CredorService {
                 const idx = fraseNormalizada.indexOf(t) + t.length;
                 return idx > last ? idx : last;
             }, -1);
-            
+
             let trechoMinimo = frase;
             if (firstIdx !== Infinity && firstIdx !== -1 && lastIdx !== -1) {
                 // Em JS, devido a normalizações, os tamanhos podem variar sutilmente, mas é seguro na maioria dos casos.
@@ -100,13 +125,15 @@ class CredorService {
 
             /**
              * SOLUÇÃO PARA DELMA CARMO CAMARAO:
-             * Usamos LIKE com COLLATE para ignorar acentos do banco (ex: Camarão).
+             * Usamos ILIKE com unaccent() dos dois lados (coluna e termo buscado) para que
+             * acentos no banco (ex: "CONTÁBIL", "CAMARÃO") não impeçam o match contra termos
+             * de busca já normalizados sem acento pela função prepararTermo().
              * O AND garante que TODOS os termos (Delma, Carmo, Camarao) estejam na descrição.
              */
             let query = pool("credor").select("codigo", "descricao");
 
             termosParaBusca.forEach(t => {
-                query = query.whereRaw("descricao ILIKE ?", [`%${t}%`]);
+                query = query.whereRaw("unaccent(descricao) ILIKE unaccent(?)", [`%${t}%`]);
             });
 
             const rows = await query.limit(10);
