@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const caminhoCsv = path.join(__dirname, "..", "..", "data", "entidades", "unidade_orcamentaria.csv");
+const { resolverPercentualMinimo } = require("../../utils/sensibilidadeMatcher");
 
 /**
  * Palavras ignoradas na busca
@@ -10,7 +11,11 @@ const STOPWORDS = new Set([
     "estadual"
 ]);
 
-const PERCENTUAL_PADRAO = 0.6;
+const PERCENTUAL_PADRAO = 0.9;
+
+const REGRAS_SENSIBILIDADE = [
+    { palavra: "unidade_orcamentaria", percentual: 0.6 }
+];
 
 /**
  * Normaliza texto para comparação:
@@ -129,7 +134,7 @@ class UnidadeOrcamentariaService {
     /**
      * Extrai unidades orçamentárias de uma frase:
      * 1. Por código (5 dígitos) — O(matches)
-     * 2. Por descrição           — O(tokens × hits) via índice invertido
+     * 2. Por descrição         — O(tokens × hits) via índice invertido com threshold dinâmico
      */
     extrair(frase) {
         const resultados = [];
@@ -137,6 +142,13 @@ class UnidadeOrcamentariaService {
 
         // 🔥 Remove stopwords também da frase digitada
         const textoNormalizado = removeStopwords(normalize(frase));
+
+        // Define o percentual mínimo com base na presença das palavras de sensibilidade
+        const percentualMinimo = resolverPercentualMinimo(
+            textoNormalizado,
+            PERCENTUAL_PADRAO,
+            REGRAS_SENSIBILIDADE
+        );
 
         // ─────────────────────────────────────────
         // 1️⃣  BUSCA POR CÓDIGO
@@ -178,12 +190,12 @@ class UnidadeOrcamentariaService {
             }
         }
 
-        // Aplica threshold de 60%
+        // Aplica threshold percentual dinâmico sobre os tokens da descrição
         for (const [codigo, hits] of contagem) {
             const palavrasTotais = this.tokensPorUnidade.get(codigo);
             const percentual = hits / palavrasTotais.length;
 
-            if (percentual >= PERCENTUAL_PADRAO) {
+            if (percentual >= percentualMinimo) {
                 const unidade = this.mapaPorCodigo.get(codigo);
                 const matchedTokens = palavrasTotais.filter(p => tokensFrase.has(p));
 

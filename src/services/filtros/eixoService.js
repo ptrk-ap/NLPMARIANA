@@ -3,10 +3,10 @@ const path = require("path");
 const caminhoCsv = path.join(__dirname, "..", "..", "data", "entidades", "eixo.csv");
 const { resolverPercentualMinimo } = require("../../utils/sensibilidadeMatcher");
 
-const PERCENTUAL_PADRAO = 0.5;
+const PERCENTUAL_PADRAO = 0.9;
 
 const REGRAS_SENSIBILIDADE = [
-    { palavra: "eixo", percentual: 0.5 }
+    { palavra: "eixo", percentual: 0.7 }
 ];
 
 /**

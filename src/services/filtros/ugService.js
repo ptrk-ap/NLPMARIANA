@@ -1,6 +1,13 @@
 const fs = require("fs");
 const path = require("path");
 const caminhoCsv = path.join(__dirname, "..", "..", "data", "entidades", "unidade_gestora.csv");
+const { resolverPercentualMinimo } = require("../../utils/sensibilidadeMatcher");
+
+const PERCENTUAL_PADRAO = 0.9;
+
+const REGRAS_SENSIBILIDADE = [
+    { palavra: "unidade_gestora", percentual: 0.6 }
+];
 
 /**
  * Palavras ignoradas na busca
@@ -151,7 +158,6 @@ class UnidadeGestoraService {
         let fim = -1;
 
         for (let i = 0; i < tokensOriginais.length; i++) {
-            // Normaliza o token sem reaplicar removeStopwords redundantemente
             const tokenNorm = normalize(tokensOriginais[i]);
 
             if (setMatch.has(tokenNorm)) {
@@ -169,13 +175,20 @@ class UnidadeGestoraService {
      * Extrai unidades gestoras de uma frase:
      * 1. Por código     — O(matches)
      * 2. Por mnemônico  — O(tokens)
-     * 3. Por descrição  — O(tokens × hits) via índice invertido
+     * 3. Por descrição  — O(tokens × hits) via índice invertido com threshold dinâmico
      */
     extrair(frase) {
         const resultados = [];
         const encontrados = new Set();
 
         const textoNormalizado = removeStopwords(normalize(frase));
+
+        // Define o percentual mínimo com base na presença das palavras de sensibilidade
+        const percentualMinimo = resolverPercentualMinimo(
+            textoNormalizado,
+            PERCENTUAL_PADRAO,
+            REGRAS_SENSIBILIDADE
+        );
 
         // ─────────────────────────────────────────
         // 1️⃣  BUSCA POR CÓDIGO
@@ -233,12 +246,12 @@ class UnidadeGestoraService {
             }
         }
 
-        // Aplica threshold de 60% sobre os tokens da descrição
+        // Aplica threshold percentual dinâmico sobre os tokens da descrição
         for (const [codigo, hits] of contagem) {
             const palavrasTotais = this.tokensPorUnidade.get(codigo);
             const percentual = hits / palavrasTotais.length;
 
-            if (percentual >= 0.6) {
+            if (percentual >= percentualMinimo) {
                 const unidade = this.mapaPorCodigo.get(codigo);
                 const matchedTokens = palavrasTotais.filter(p => tokensFrase.has(p));
 

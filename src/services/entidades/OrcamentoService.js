@@ -209,8 +209,6 @@ class OrcamentoService {
                 "pagos",
                 "paga",
                 "pagas",
-                "despesa",
-                "despesas",
                 "pagamento",
                 "pagamentos"
             ],
@@ -287,16 +285,16 @@ class OrcamentoService {
                 "anuais"
             ],
             "Diárias - Militar": [
-            "diarias militar",
-            "diaria militar",
-            "diaria para militares",
-            "diarias de militares",
-            "diarias para militares"
+                "diarias militar",
+                "diaria militar",
+                "diaria para militares",
+                "diarias de militares",
+                "diarias para militares"
             ],
 
             "Diárias - Civil": [
-            "diarias",
-            "diaria"
+                "diarias",
+                "diaria"
             ]
         };
 

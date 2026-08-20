@@ -25,7 +25,7 @@ function normalize(text) {
  * - extrair grupos de despesa a partir de uma frase
  *
  * REGRA ESPECIAL:
- * - só permite busca por CÓDIGO se a frase contiver "grupo_despesa"
+ * - só permite qualquer busca (CÓDIGO ou DESCRIÇÃO) se a frase contiver "grupo_despesa"
  */
 class GrupoDespesaService {
 
@@ -119,38 +119,39 @@ class GrupoDespesaService {
 
     /**
      * Extrai grupos de despesa de uma frase:
-     * 1. Por código (CONDICIONAL) — O(matches)
-     * 2. Por descrição             — O(tokens × hits) via índice invertido
+     * 1. Verifica se "grupo_despesa" está presente na frase. Se não estiver, cancela a busca.
+     * 2. Por código      — O(matches)
+     * 3. Por descrição  — O(tokens × hits) via índice invertido
      */
     extrair(frase) {
-        const resultados = [];
-        const encontrados = new Set();
-
         const textoNormalizado = normalize(frase);
 
         // ─────────────────────────────────────────
-        // 🔐 REGRA: permite busca por código?
+        // 🔐 REGRA: "grupo_despesa" deve estar presente na frase
         // ─────────────────────────────────────────
-        const permiteBuscaPorCodigo = textoNormalizado.includes("grupo_despesa");
+        if (!textoNormalizado.includes("grupo_despesa")) {
+            return [];
+        }
+
+        const resultados = [];
+        const encontrados = new Set();
 
         // ─────────────────────────────────────────
-        // 1️⃣  BUSCA POR CÓDIGO (CONDICIONAL)
+        // 1️⃣  BUSCA POR CÓDIGO
         // ─────────────────────────────────────────
-        if (permiteBuscaPorCodigo) {
-            // Aceita SOMENTE um dígito isolado (ex: "1", "3", "9")
-            const codigos = frase.match(/\b\d\b/g) || [];
+        // Aceita SOMENTE um dígito isolado (ex: "1", "3", "9")
+        const codigos = frase.match(/\b\d\b/g) || [];
 
-            for (const codigo of codigos) {
-                const grupo = this.mapaPorCodigo.get(codigo);
+        for (const codigo of codigos) {
+            const grupo = this.mapaPorCodigo.get(codigo);
 
-                if (grupo && !encontrados.has(codigo)) {
-                    resultados.push({
-                        codigo: grupo.codigo,
-                        descricao: grupo.descricao,
-                        trecho_encontrado: codigo
-                    });
-                    encontrados.add(codigo);
-                }
+            if (grupo && !encontrados.has(codigo)) {
+                resultados.push({
+                    codigo: grupo.codigo,
+                    descricao: grupo.descricao,
+                    trecho_encontrado: codigo
+                });
+                encontrados.add(codigo);
             }
         }
 
