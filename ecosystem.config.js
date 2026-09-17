@@ -1,21 +1,26 @@
 const path = require('path');
 const dotenv = require('dotenv');
 
-// Carrega o arquivo de ambiente específico do servidor se ele existir
-dotenv.config({ path: path.join(__dirname, '.env.production') });
+// Carrega o .env.production se existir, senão carrega o .env padrão
+const fs = require('fs');
+const envFile = fs.existsSync(path.join(__dirname, '.env.production')) ? '.env.production' : '.env';
+dotenv.config({ path: path.join(__dirname, envFile) });
 
 module.exports = {
-    apps: [{
-        name: 'portal-web',
-        script: './src/server.js', // Altere para o seu ponto de entrada (ex: index.js)
-        instances: 'max',
-        exec_mode: 'cluster',
-        env_production: {
-            NODE_ENV: 'production',
-            PORT: process.env.PORT || 3000,
-            DATABASE_URL: process.env.DATABASE_URL,
-            JWT_SECRET: process.env.JWT_SECRET
-            // Adicione as demais chaves mapeadas no seu .env.example
-        }
-    }]
+  apps: [{
+    name: 'portal-web',
+    script: './src/server.js',
+    instances: '3',
+    exec_mode: 'cluster',
+    env_production: {
+      NODE_ENV: 'production',
+      PORT: process.env.PORT || 3000,
+      DATABASE_URL: process.env.DATABASE_URL,
+      API_USERNAME: process.env.API_USERNAME,
+      API_PASSWORD: process.env.API_PASSWORD,
+      TRIGGER_USERNAME: process.env.TRIGGER_USERNAME,
+      TRIGGER_PASSWORD: process.env.TRIGGER_PASSWORD,
+      JWT_SECRET: process.env.JWT_SECRET
+    }
+  }]
 };

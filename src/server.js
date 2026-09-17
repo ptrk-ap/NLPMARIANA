@@ -1,11 +1,8 @@
 const app = require("./app");
-const path = require("path");
-require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
-
 const db = require("./database/connection");
 
 // Validação básica de variáveis de ambiente
-const requiredEnv = ["PORT", "API_USERNAME", "API_PASSWORD"];
+const requiredEnv = ["PORT", "API_USERNAME", "API_PASSWORD", "DATABASE_URL"];
 const missingEnv = requiredEnv.filter(env => !process.env[env]);
 
 if (missingEnv.length > 0) {
