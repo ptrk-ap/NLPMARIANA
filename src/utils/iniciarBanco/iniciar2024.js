@@ -40,7 +40,7 @@ const { populateCredores } = require("../populate_credores");
 // ─── Configuração: Anos a Carregar ────────────────────────────────────────────
 // Altere essa variável para escolher quais exercícios serão importados.
 // Valores válidos: 2024, 2025, 2026
-const ANOS_CARREGAR = [2024, 2025, 2026];
+const ANOS_CARREGAR = [2024];
 
 // Mapa de todos os anos disponíveis → função de importação correspondente
 const POPULATORS = {
