@@ -63,6 +63,7 @@ Inicie o serviço com o perfil de produção:
 
 ```bash
 pm2 start ecosystem.config.js --env production
+pm2.cmd start ecosystem.config.js --env production
 ```
 
 O processo registrado chama-se `portal-web`. A configuração inicia três instâncias em cluster, reinicia processos que falhem e limita cada processo a 500 MB de memória.
