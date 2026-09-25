@@ -22,35 +22,46 @@ function normalize(text) {
 class AcaoService {
 
     constructor() {
-        // Carrega CSV uma única vez
-        this.acoes = this.carregarCsv(caminhoCsv);
+        const anos = ["2024", "2025", "2026"];
+        this.dadosPorAno = {};
+        const pastaBase = path.join(__dirname, "..", "..", "data", "entidades");
 
-        // Índice por código — O(1)
-        this.mapaPorCodigo = new Map(
-            this.acoes.map(a => [a.codigo, a])
-        );
+        for (const ano of anos) {
+            const caminho = path.join(pastaBase, ano, "acao.csv");
+            if (!fs.existsSync(caminho)) {
+                // Tenta cair pro padrão se não achar na pasta do ano
+                const caminhoPadrao = path.join(pastaBase, "acao.csv");
+                if (fs.existsSync(caminhoPadrao)) {
+                    this._carregarParaAno(ano, caminhoPadrao);
+                }
+                continue;
+            }
+            this._carregarParaAno(ano, caminho);
+        }
+    }
 
-        // Índice invertido por token de descrição — evita loop O(N) na busca
-        // token → [acao, ...]
-        this.indiceDescricao = new Map();
+    _carregarParaAno(ano, caminho) {
+        const acoes = this.carregarCsv(caminho);
+        const mapaPorCodigo = new Map(acoes.map(a => [a.codigo, a]));
+        const indiceDescricao = new Map();
+        const tokensPorAcao = new Map();
 
-        // Tokens pré-computados por ação — usados para calcular o threshold
-        this.tokensPorAcao = new Map();
-
-        for (const acao of this.acoes) {
+        for (const acao of acoes) {
             const tokens = normalize(acao.descricao)
                 .split(/\s+/)
                 .filter(p => p.length > 3);
 
-            this.tokensPorAcao.set(acao.codigo, tokens);
+            tokensPorAcao.set(acao.codigo, tokens);
 
             for (const token of tokens) {
-                if (!this.indiceDescricao.has(token)) {
-                    this.indiceDescricao.set(token, []);
+                if (!indiceDescricao.has(token)) {
+                    indiceDescricao.set(token, []);
                 }
-                this.indiceDescricao.get(token).push(acao);
+                indiceDescricao.get(token).push(acao);
             }
         }
+
+        this.dadosPorAno[ano] = { acoes, mapaPorCodigo, indiceDescricao, tokensPorAcao };
     }
 
     /**
@@ -113,7 +124,7 @@ class AcaoService {
      * 1. Por código    — O(matches)
      * 2. Por descrição — O(tokens × hits) via índice invertido
      */
-    extrair(frase) {
+    extrair(frase, anosSolicitados = []) {
         const resultados = [];
         const encontrados = new Set();
 
@@ -123,71 +134,73 @@ class AcaoService {
         if (!/\bacao\b/.test(textoNormalizado)) return [];
 
         const temPrograma = /\bprograma\b/.test(textoNormalizado);
-
-        // ─────────────────────────────────────────
-        // 1️⃣  BUSCA POR CÓDIGO
-        // ─────────────────────────────────────────
         const codigos = frase.match(/\b\d{4}\b/g) || [];
+        const percentualMinimo = resolverPercentualMinimo(textoNormalizado, PERCENTUAL_PADRAO, REGRAS_SENSIBILIDADE);
+        const tokensFrase = new Set(textoNormalizado.split(/\s+/).filter(p => p.length > 3));
 
-        for (const codigo of codigos) {
+        // Se não houver ano solicitado explícito, pega o ano padrão/atual
+        if (!anosSolicitados || anosSolicitados.length === 0) {
+            anosSolicitados = [new Date().getFullYear().toString()];
+        } else {
+            anosSolicitados = anosSolicitados.map(a => a.toString());
+        }
+
+        for (const ano of anosSolicitados) {
+            const dadosAno = this.dadosPorAno[ano];
+            if (!dadosAno) continue;
+
+            // ─────────────────────────────────────────
+            // 1️⃣  BUSCA POR CÓDIGO
+            // ─────────────────────────────────────────
+            for (const codigo of codigos) {
+                if (temPrograma) continue;
+
+                const acao = dadosAno.mapaPorCodigo.get(codigo);
+
+                if (acao && !encontrados.has(codigo)) {
+                    resultados.push({
+                        codigo: acao.codigo,
+                        descricao: acao.descricao,
+                        trecho_encontrado: codigo
+                    });
+                    encontrados.add(codigo);
+                }
+            }
+
+            // ─────────────────────────────────────────
+            // 2️⃣  BUSCA POR DESCRIÇÃO via índice invertido
+            // ─────────────────────────────────────────
             if (temPrograma) continue;
 
-            const acao = this.mapaPorCodigo.get(codigo);
+            // Conta quantos tokens de cada ação aparecem na frase
+            const contagem = new Map(); // codigo → número de hits
 
-            if (acao && !encontrados.has(codigo)) {
-                resultados.push({
-                    codigo: acao.codigo,
-                    descricao: acao.descricao,
-                    trecho_encontrado: codigo
-                });
-                encontrados.add(codigo);
+            for (const token of tokensFrase) {
+                const candidatos = dadosAno.indiceDescricao.get(token);
+                if (!candidatos) continue;
+
+                for (const acao of candidatos) {
+                    if (encontrados.has(acao.codigo)) continue;
+                    contagem.set(acao.codigo, (contagem.get(acao.codigo) || 0) + 1);
+                }
             }
-        }
 
-        // ─────────────────────────────────────────
-        // 2️⃣  BUSCA POR DESCRIÇÃO via índice invertido
-        // ─────────────────────────────────────────
-        const percentualMinimo = resolverPercentualMinimo(
-            textoNormalizado,
-            PERCENTUAL_PADRAO,
-            REGRAS_SENSIBILIDADE
-        );
+            // Aplica threshold percentual
+            for (const [codigo, hits] of contagem) {
+                const palavrasTotais = dadosAno.tokensPorAcao.get(codigo);
+                const percentual = hits / palavrasTotais.length;
 
-        if (temPrograma) return resultados;
+                if (percentual >= percentualMinimo) {
+                    const acao = dadosAno.mapaPorCodigo.get(codigo);
+                    const matchedTokens = palavrasTotais.filter(p => tokensFrase.has(p));
 
-        // Conjunto de tokens relevantes da frase (len > 3)
-        const tokensFrase = new Set(
-            textoNormalizado.split(/\s+/).filter(p => p.length > 3)
-        );
-
-        // Conta quantos tokens de cada ação aparecem na frase
-        const contagem = new Map(); // codigo → número de hits
-
-        for (const token of tokensFrase) {
-            const candidatos = this.indiceDescricao.get(token);
-            if (!candidatos) continue;
-
-            for (const acao of candidatos) {
-                if (encontrados.has(acao.codigo)) continue;
-                contagem.set(acao.codigo, (contagem.get(acao.codigo) || 0) + 1);
-            }
-        }
-
-        // Aplica threshold percentual
-        for (const [codigo, hits] of contagem) {
-            const palavrasTotais = this.tokensPorAcao.get(codigo);
-            const percentual = hits / palavrasTotais.length;
-
-            if (percentual >= percentualMinimo) {
-                const acao = this.mapaPorCodigo.get(codigo);
-                const matchedTokens = palavrasTotais.filter(p => tokensFrase.has(p));
-
-                resultados.push({
-                    codigo: acao.codigo,
-                    descricao: acao.descricao,
-                    trecho_encontrado: this._extrairTrechoDescricao(frase, matchedTokens)
-                });
-                encontrados.add(codigo);
+                    resultados.push({
+                        codigo: acao.codigo,
+                        descricao: acao.descricao,
+                        trecho_encontrado: this._extrairTrechoDescricao(frase, matchedTokens)
+                    });
+                    encontrados.add(codigo);
+                }
             }
         }
 

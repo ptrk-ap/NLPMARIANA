@@ -33,38 +33,47 @@ function normalizarCodigo(codigo) {
 
 class EixoService {
 
+    
     constructor() {
-        this.eixos = this.carregarCsv(caminhoCsv);
+        const anos = ["2024", "2025", "2026"];
+        this.dadosPorAno = {};
+        const pastaBase = path.join(__dirname, "..", "..", "data", "entidades");
 
-        // Índice por código normalizado — O(1)
-        this.mapaPorCodigo = new Map(
-            this.eixos.map(e => [
-                normalizarCodigo(e.codigo),
-                e
-            ])
-        );
+        for (const ano of anos) {
+            const caminho = path.join(pastaBase, ano, "eixo.csv");
+            if (!fs.existsSync(caminho)) {
+                const caminhoPadrao = path.join(pastaBase, "eixo.csv");
+                if (fs.existsSync(caminhoPadrao)) {
+                    this._carregarParaAno(ano, caminhoPadrao);
+                }
+                continue;
+            }
+            this._carregarParaAno(ano, caminho);
+        }
+    }
 
-        // Índice invertido por token de descrição — evita loop O(N) na busca
-        // token → [eixo, ...]
-        this.indiceDescricao = new Map();
+    _carregarParaAno(ano, caminho) {
+        const eixos = this.carregarCsv(caminho);
+        const mapaPorCodigo = new Map(eixos.map(x => [x.codigo, x]));
+        const indiceDescricao = new Map();
+        const tokensPorEixo = new Map();
 
-        // Tokens pré-computados por eixo — usados para calcular o threshold
-        this.tokensPorEixo = new Map();
-
-        for (const eixo of this.eixos) {
+        for (const eixo of eixos) {
             const tokens = normalize(eixo.descricao)
                 .split(/\s+/)
                 .filter(p => p.length > 3);
 
-            this.tokensPorEixo.set(eixo.codigo, tokens);
+            tokensPorEixo.set(eixo.codigo, tokens);
 
             for (const token of tokens) {
-                if (!this.indiceDescricao.has(token)) {
-                    this.indiceDescricao.set(token, []);
+                if (!indiceDescricao.has(token)) {
+                    indiceDescricao.set(token, []);
                 }
-                this.indiceDescricao.get(token).push(eixo);
+                indiceDescricao.get(token).push(eixo);
             }
         }
+
+        this.dadosPorAno[ano] = { eixos, mapaPorCodigo, indiceDescricao, tokensPorEixo };
     }
 
     /**
@@ -132,9 +141,25 @@ class EixoService {
      * 1. Por código    — O(matches)
      * 2. Por descrição — O(tokens × hits) via índice invertido
      */
-    extrair(frase) {
-        const resultados = [];
-        const encontrados = new Set();
+    extrair(frase, anosSolicitados = []) {
+        
+        if (!anosSolicitados || anosSolicitados.length === 0) {
+            anosSolicitados = [new Date().getFullYear().toString()];
+        } else {
+            anosSolicitados = anosSolicitados.map(a => a.toString());
+        }
+
+        const resultadosFinais = [];
+        const encontradosGlobais = new Set();
+        
+        for (const ano of anosSolicitados) {
+            const dadosAno = this.dadosPorAno[ano];
+            if (!dadosAno) continue;
+            
+            // Variáveis locais para o algoritmo original
+            const encontrados = encontradosGlobais;
+            const resultados = resultadosFinais;
+
 
         const textoNormalizado = normalize(frase);
 
@@ -154,7 +179,7 @@ class EixoService {
 
         for (const codigoBruto of codigos) {
             const codigoNormalizado = normalizarCodigo(codigoBruto);
-            const eixo = this.mapaPorCodigo.get(codigoNormalizado);
+            const eixo = dadosAno.mapaPorCodigo.get(codigoNormalizado);
 
             if (eixo && !encontrados.has(codigoNormalizado)) {
                 resultados.push({
@@ -179,7 +204,7 @@ class EixoService {
         const contagem = new Map(); // codigo → número de hits
 
         for (const token of tokensFrase) {
-            const candidatos = this.indiceDescricao.get(token);
+            const candidatos = dadosAno.indiceDescricao.get(token);
             if (!candidatos) continue;
 
             for (const eixo of candidatos) {
@@ -191,11 +216,11 @@ class EixoService {
 
         // Aplica threshold percentual
         for (const [codigo, hits] of contagem) {
-            const palavrasTotais = this.tokensPorEixo.get(codigo);
+            const palavrasTotais = dadosAno.tokensPorEixo.get(codigo);
             const percentual = hits / palavrasTotais.length;
 
             if (percentual >= percentualMinimo) {
-                const eixo = this.mapaPorCodigo.get(normalizarCodigo(codigo));
+                const eixo = dadosAno.mapaPorCodigo.get(normalizarCodigo(codigo));
                 const matchedTokens = palavrasTotais.filter(p => tokensFrase.has(p));
 
                 resultados.push({
@@ -207,7 +232,8 @@ class EixoService {
             }
         }
 
-        return resultados;
+        }
+        return resultadosFinais;
     }
 }
 

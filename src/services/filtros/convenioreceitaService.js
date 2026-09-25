@@ -12,14 +12,47 @@ const caminhoCsv = path.join(__dirname, "..", "..", "data", "entidades", "conven
  */
 class ConvenioReceitaService {
 
+    
     constructor() {
-        // Carrega CSV uma única vez
-        this.convenios = this.carregarCsv(caminhoCsv);
+        const anos = ["2024", "2025", "2026"];
+        this.dadosPorAno = {};
+        const pastaBase = path.join(__dirname, "..", "..", "data", "entidades");
 
-        // Índice rápido por código — O(1)
-        this.mapaPorCodigo = new Map(
-            this.convenios.map(c => [c.codigo, c])
-        );
+        for (const ano of anos) {
+            const caminho = path.join(pastaBase, ano, "convenio_receita.csv");
+            if (!fs.existsSync(caminho)) {
+                const caminhoPadrao = path.join(pastaBase, "convenio_receita.csv");
+                if (fs.existsSync(caminhoPadrao)) {
+                    this._carregarParaAno(ano, caminhoPadrao);
+                }
+                continue;
+            }
+            this._carregarParaAno(ano, caminho);
+        }
+    }
+
+    _carregarParaAno(ano, caminho) {
+        const convenios = this.carregarCsv(caminho);
+        const mapaPorCodigo = new Map(convenios.map(x => [x.codigo, x]));
+        const indiceDescricao = new Map();
+        const tokensPorItem = new Map();
+
+        for (const item of convenios) {
+            const tokens = normalize(item.descricao)
+                .split(/\s+/)
+                .filter(p => p.length > 3);
+
+            tokensPorItem.set(item.codigo, tokens);
+
+            for (const token of tokens) {
+                if (!indiceDescricao.has(token)) {
+                    indiceDescricao.set(token, []);
+                }
+                indiceDescricao.get(token).push(item);
+            }
+        }
+
+        this.dadosPorAno[ano] = { convenios, mapaPorCodigo, indiceDescricao, tokensPorItem };
     }
 
     /**
@@ -56,20 +89,36 @@ class ConvenioReceitaService {
      *
      * Complexidade: O(matches) — busca direta no Map.
      */
-    extrair(frase) {
+    extrair(frase, anosSolicitados = []) {
         if (!frase) return [];
 
         // Trigger obrigatório
         if (!frase.includes("convenio_receita")) return [];
 
-        const resultados = [];
-        const encontrados = new Set();
+        
+        if (!anosSolicitados || anosSolicitados.length === 0) {
+            anosSolicitados = [new Date().getFullYear().toString()];
+        } else {
+            anosSolicitados = anosSolicitados.map(a => a.toString());
+        }
+
+        const resultadosFinais = [];
+        const encontradosGlobais = new Set();
+        
+        for (const ano of anosSolicitados) {
+            const dadosAno = this.dadosPorAno[ano];
+            if (!dadosAno) continue;
+            
+            // Variáveis locais para o algoritmo original
+            const encontrados = encontradosGlobais;
+            const resultados = resultadosFinais;
+
 
         // 🔐 Captura exatamente 6 dígitos (mesmo colado)
         const codigos = frase.match(/(?<!\d)\d{6}(?!\d)/g) || [];
 
         for (const codigo of codigos) {
-            const convenio = this.mapaPorCodigo.get(codigo);
+            const convenio = dadosAno.mapaPorCodigo.get(codigo);
 
             if (convenio && !encontrados.has(codigo)) {
                 resultados.push({
@@ -100,7 +149,8 @@ class ConvenioReceitaService {
             ];
         }
 
-        return resultados;
+        }
+        return resultadosFinais;
     }
 }
 

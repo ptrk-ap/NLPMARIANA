@@ -77,41 +77,47 @@ function parseCsvLinha(linha) {
 
 class UnidadeGestoraService {
 
+    
     constructor() {
-        // Carrega CSV uma única vez
-        this.unidades = this.carregarCsv(caminhoCsv);
+        const anos = ["2024", "2025", "2026"];
+        this.dadosPorAno = {};
+        const pastaBase = path.join(__dirname, "..", "..", "data", "entidades");
 
-        // Índice por código — O(1)
-        this.mapaPorCodigo = new Map(
-            this.unidades.map(u => [u.codigo, u])
-        );
+        for (const ano of anos) {
+            const caminho = path.join(pastaBase, ano, "unidade_gestora.csv");
+            if (!fs.existsSync(caminho)) {
+                const caminhoPadrao = path.join(pastaBase, "unidade_gestora.csv");
+                if (fs.existsSync(caminhoPadrao)) {
+                    this._carregarParaAno(ano, caminhoPadrao);
+                }
+                continue;
+            }
+            this._carregarParaAno(ano, caminho);
+        }
+    }
 
-        // Índice por mnemônico — O(1)
-        this.mapaPorMnemonico = new Map(
-            this.unidades.map(u => [normalize(u.mnemonico), u])
-        );
+    _carregarParaAno(ano, caminho) {
+        const unidades = this.carregarCsv(caminho);
+        const mapaPorCodigo = new Map(unidades.map(x => [x.codigo, x]));
+        const indiceDescricao = new Map();
+        const tokensPorUnidade = new Map();
 
-        // Índice invertido por token de descrição — evita loop O(U) na busca
-        // token → [unidade, ...]
-        this.indiceDescricao = new Map();
-
-        // Tokens pré-computados por unidade — usados para calcular o threshold
-        this.tokensPorUnidade = new Map();
-
-        for (const unidade of this.unidades) {
-            const tokens = removeStopwords(normalize(unidade.descricao))
+        for (const unidade of unidades) {
+            const tokens = normalize(unidade.descricao)
                 .split(/\s+/)
                 .filter(p => p.length > 3);
 
-            this.tokensPorUnidade.set(unidade.codigo, tokens);
+            tokensPorUnidade.set(unidade.codigo, tokens);
 
             for (const token of tokens) {
-                if (!this.indiceDescricao.has(token)) {
-                    this.indiceDescricao.set(token, []);
+                if (!indiceDescricao.has(token)) {
+                    indiceDescricao.set(token, []);
                 }
-                this.indiceDescricao.get(token).push(unidade);
+                indiceDescricao.get(token).push(unidade);
             }
         }
+
+        this.dadosPorAno[ano] = { unidades, mapaPorCodigo, indiceDescricao, tokensPorUnidade };
     }
 
     /**
@@ -177,9 +183,25 @@ class UnidadeGestoraService {
      * 2. Por mnemônico  — O(tokens)
      * 3. Por descrição  — O(tokens × hits) via índice invertido com threshold dinâmico
      */
-    extrair(frase) {
-        const resultados = [];
-        const encontrados = new Set();
+    extrair(frase, anosSolicitados = []) {
+        
+        if (!anosSolicitados || anosSolicitados.length === 0) {
+            anosSolicitados = [new Date().getFullYear().toString()];
+        } else {
+            anosSolicitados = anosSolicitados.map(a => a.toString());
+        }
+
+        const resultadosFinais = [];
+        const encontradosGlobais = new Set();
+        
+        for (const ano of anosSolicitados) {
+            const dadosAno = this.dadosPorAno[ano];
+            if (!dadosAno) continue;
+            
+            // Variáveis locais para o algoritmo original
+            const encontrados = encontradosGlobais;
+            const resultados = resultadosFinais;
+
 
         const textoNormalizado = removeStopwords(normalize(frase));
 
@@ -196,7 +218,7 @@ class UnidadeGestoraService {
         const codigos = frase.match(REGEX_CODIGO_FRASE) || [];
 
         for (const codigo of codigos) {
-            const unidade = this.mapaPorCodigo.get(codigo);
+            const unidade = dadosAno.mapaPorCodigo.get(codigo);
             if (unidade && !encontrados.has(codigo)) {
                 resultados.push({
                     codigo: unidade.codigo,
@@ -237,7 +259,7 @@ class UnidadeGestoraService {
         const contagem = new Map(); // codigo → número de hits
 
         for (const token of tokensFrase) {
-            const candidatos = this.indiceDescricao.get(token);
+            const candidatos = dadosAno.indiceDescricao.get(token);
             if (!candidatos) continue;
 
             for (const unidade of candidatos) {
@@ -248,11 +270,11 @@ class UnidadeGestoraService {
 
         // Aplica threshold percentual dinâmico sobre os tokens da descrição
         for (const [codigo, hits] of contagem) {
-            const palavrasTotais = this.tokensPorUnidade.get(codigo);
+            const palavrasTotais = dadosAno.tokensPorUnidade.get(codigo);
             const percentual = hits / palavrasTotais.length;
 
             if (percentual >= percentualMinimo) {
-                const unidade = this.mapaPorCodigo.get(codigo);
+                const unidade = dadosAno.mapaPorCodigo.get(codigo);
                 const matchedTokens = palavrasTotais.filter(p => tokensFrase.has(p));
 
                 resultados.push({
@@ -264,7 +286,8 @@ class UnidadeGestoraService {
             }
         }
 
-        return resultados;
+        }
+        return resultadosFinais;
     }
 }
 

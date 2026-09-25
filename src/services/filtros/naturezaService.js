@@ -30,37 +30,47 @@ function normalize(text) {
  */
 class NaturezaService {
 
+    
     constructor() {
-        // Carrega o CSV uma única vez ao iniciar o serviço
-        this.naturezas = this.carregarCsv(caminhoCsv);
+        const anos = ["2024", "2025", "2026"];
+        this.dadosPorAno = {};
+        const pastaBase = path.join(__dirname, "..", "..", "data", "entidades");
 
-        // Índice por código — O(1)
-        this.mapaPorCodigo = new Map(
-            this.naturezas.map(n => [n.codigo, n])
-        );
+        for (const ano of anos) {
+            const caminho = path.join(pastaBase, ano, "natureza_despesa.csv");
+            if (!fs.existsSync(caminho)) {
+                const caminhoPadrao = path.join(pastaBase, "natureza_despesa.csv");
+                if (fs.existsSync(caminhoPadrao)) {
+                    this._carregarParaAno(ano, caminhoPadrao);
+                }
+                continue;
+            }
+            this._carregarParaAno(ano, caminho);
+        }
+    }
 
-        // Índice invertido por token de descrição — evita loop O(N) na busca
-        // token → [natureza, ...]
-        // CRITÉRIO ESPECIAL: inclui token "nao" além de p.length > 3
-        this.indiceDescricao = new Map();
+    _carregarParaAno(ano, caminho) {
+        const naturezas = this.carregarCsv(caminho);
+        const mapaPorCodigo = new Map(naturezas.map(x => [x.codigo, x]));
+        const indiceDescricao = new Map();
+        const tokensPorNatureza = new Map();
 
-        // Tokens pré-computados por natureza — usados para calcular o threshold
-        this.tokensPorNatureza = new Map();
-
-        for (const natureza of this.naturezas) {
+        for (const natureza of naturezas) {
             const tokens = normalize(natureza.descricao)
                 .split(/\s+/)
                 .filter(p => p.length > 3 || p === "nao");
 
-            this.tokensPorNatureza.set(natureza.codigo, tokens);
+            tokensPorNatureza.set(natureza.codigo, tokens);
 
             for (const token of tokens) {
-                if (!this.indiceDescricao.has(token)) {
-                    this.indiceDescricao.set(token, []);
+                if (!indiceDescricao.has(token)) {
+                    indiceDescricao.set(token, []);
                 }
-                this.indiceDescricao.get(token).push(natureza);
+                indiceDescricao.get(token).push(natureza);
             }
         }
+
+        this.dadosPorAno[ano] = { naturezas, mapaPorCodigo, indiceDescricao, tokensPorNatureza };
     }
 
     /**
@@ -124,9 +134,25 @@ class NaturezaService {
      * 1. Por código (regex especial \d{2}[1-9]\d{3}) — O(matches)
      * 2. Por descrição                                 — O(tokens × hits) via índice invertido
      */
-    extrair(frase) {
-        const resultados = [];
-        const encontrados = new Set();
+    extrair(frase, anosSolicitados = []) {
+        
+        if (!anosSolicitados || anosSolicitados.length === 0) {
+            anosSolicitados = [new Date().getFullYear().toString()];
+        } else {
+            anosSolicitados = anosSolicitados.map(a => a.toString());
+        }
+
+        const resultadosFinais = [];
+        const encontradosGlobais = new Set();
+        
+        for (const ano of anosSolicitados) {
+            const dadosAno = this.dadosPorAno[ano];
+            if (!dadosAno) continue;
+            
+            // Variáveis locais para o algoritmo original
+            const encontrados = encontradosGlobais;
+            const resultados = resultadosFinais;
+
 
         const textoNormalizado = normalize(frase);
 
@@ -137,7 +163,7 @@ class NaturezaService {
         const codigos = frase.match(/\b\d{2}[1-9]\d{3}\b/g) || [];
 
         for (const codigo of codigos) {
-            const natureza = this.mapaPorCodigo.get(codigo);
+            const natureza = dadosAno.mapaPorCodigo.get(codigo);
 
             if (natureza && !encontrados.has(codigo)) {
                 resultados.push({
@@ -167,7 +193,7 @@ class NaturezaService {
         const contagem = new Map(); // codigo → número de hits
 
         for (const token of tokensFrase) {
-            const candidatos = this.indiceDescricao.get(token);
+            const candidatos = dadosAno.indiceDescricao.get(token);
             if (!candidatos) continue;
 
             for (const natureza of candidatos) {
@@ -178,11 +204,11 @@ class NaturezaService {
 
         // Aplica threshold percentual
         for (const [codigo, hits] of contagem) {
-            const palavrasTotais = this.tokensPorNatureza.get(codigo);
+            const palavrasTotais = dadosAno.tokensPorNatureza.get(codigo);
             const percentual = hits / palavrasTotais.length;
 
             if (percentual >= percentualMinimo) {
-                const natureza = this.mapaPorCodigo.get(codigo);
+                const natureza = dadosAno.mapaPorCodigo.get(codigo);
                 const matchedTokens = palavrasTotais.filter(p => tokensFrase.has(p));
 
                 resultados.push({
@@ -194,7 +220,8 @@ class NaturezaService {
             }
         }
 
-        return resultados;
+        }
+        return resultadosFinais;
     }
 }
 

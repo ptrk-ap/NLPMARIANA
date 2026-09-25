@@ -23,57 +23,47 @@ function normalize(text) {
 
 class ProgramaService {
 
+    
     constructor() {
-        // Carrega CSV uma única vez
-        this.programas = this.carregarCsv(caminhoCsv);
+        const anos = ["2024", "2025", "2026"];
+        this.dadosPorAno = {};
+        const pastaBase = path.join(__dirname, "..", "..", "data", "entidades");
 
-        // Índice por código — O(1)
-        this.mapaPorCodigo = new Map(
-            this.programas.map(p => [p.codigo, p])
-        );
+        for (const ano of anos) {
+            const caminho = path.join(pastaBase, ano, "programa.csv");
+            if (!fs.existsSync(caminho)) {
+                const caminhoPadrao = path.join(pastaBase, "programa.csv");
+                if (fs.existsSync(caminhoPadrao)) {
+                    this._carregarParaAno(ano, caminhoPadrao);
+                }
+                continue;
+            }
+            this._carregarParaAno(ano, caminho);
+        }
+    }
 
-        // Índice invertido por token de descrição — evita loop O(N) na busca
-        // token → [programa, ...]
-        this.indiceDescricao = new Map();
+    _carregarParaAno(ano, caminho) {
+        const programas = this.carregarCsv(caminho);
+        const mapaPorCodigo = new Map(programas.map(x => [x.codigo, x]));
+        const indiceDescricao = new Map();
+        const tokensPorPrograma = new Map();
 
-        // Tokens pré-computados por programa — usados para calcular o threshold
-        this.tokensPorPrograma = new Map();
-
-        for (const programa of this.programas) {
+        for (const programa of programas) {
             const tokens = normalize(programa.descricao)
                 .split(/\s+/)
                 .filter(p => p.length > 3);
 
-            this.tokensPorPrograma.set(programa.codigo, tokens);
+            tokensPorPrograma.set(programa.codigo, tokens);
 
             for (const token of tokens) {
-                if (!this.indiceDescricao.has(token)) {
-                    this.indiceDescricao.set(token, []);
+                if (!indiceDescricao.has(token)) {
+                    indiceDescricao.set(token, []);
                 }
-                this.indiceDescricao.get(token).push(programa);
+                indiceDescricao.get(token).push(programa);
             }
         }
-    }
 
-    carregarCsv(caminho) {
-        const conteudo = fs.readFileSync(caminho, "utf8");
-
-        return conteudo
-            .split(/\r?\n/)
-            .filter(Boolean)
-            .slice(1)
-            .map(linha => {
-                const [codigo, descricao] = linha.split(",");
-
-                return {
-                    codigo: (codigo || "").trim(),
-                    descricao: (descricao || "").trim()
-                };
-            })
-            .filter(item =>
-                /^\d{4}$/.test(item.codigo) &&
-                item.descricao
-            );
+        this.dadosPorAno[ano] = { programas, mapaPorCodigo, indiceDescricao, tokensPorPrograma };
     }
 
     /**
@@ -110,9 +100,25 @@ class ProgramaService {
      * 1. Por código  — O(matches), com lógica de elegibilidade
      * 2. Por descrição — O(tokens × hits) via índice invertido
      */
-    extrair(frase) {
-        const resultados = [];
-        const encontrados = new Set();
+    extrair(frase, anosSolicitados = []) {
+        
+        if (!anosSolicitados || anosSolicitados.length === 0) {
+            anosSolicitados = [new Date().getFullYear().toString()];
+        } else {
+            anosSolicitados = anosSolicitados.map(a => a.toString());
+        }
+
+        const resultadosFinais = [];
+        const encontradosGlobais = new Set();
+        
+        for (const ano of anosSolicitados) {
+            const dadosAno = this.dadosPorAno[ano];
+            if (!dadosAno) continue;
+            
+            // Variáveis locais para o algoritmo original
+            const encontrados = encontradosGlobais;
+            const resultados = resultadosFinais;
+
 
         const textoNormalizado = normalize(frase);
 
@@ -142,7 +148,7 @@ class ProgramaService {
 
             if (temAcao) continue;
 
-            const programa = this.mapaPorCodigo.get(codigo);
+            const programa = dadosAno.mapaPorCodigo.get(codigo);
 
             if (programa && !encontrados.has(codigo)) {
                 resultados.push({
@@ -159,7 +165,7 @@ class ProgramaService {
         // ─────────────────────────────────────────
 
         // Shortcircuit: não busca por descrição se houver ação ou código inválido
-        if (temAcao || existeCodigoInvalido) return resultados;
+        if (temAcao || existeCodigoInvalido) continue;
 
         const percentualMinimo = resolverPercentualMinimo(
             textoNormalizado,
@@ -176,7 +182,7 @@ class ProgramaService {
         const contagem = new Map(); // codigo → número de hits
 
         for (const token of tokensFrase) {
-            const candidatos = this.indiceDescricao.get(token);
+            const candidatos = dadosAno.indiceDescricao.get(token);
             if (!candidatos) continue;
 
             for (const programa of candidatos) {
@@ -187,11 +193,11 @@ class ProgramaService {
 
         // Aplica threshold percentual
         for (const [codigo, hits] of contagem) {
-            const palavrasTotais = this.tokensPorPrograma.get(codigo);
+            const palavrasTotais = dadosAno.tokensPorPrograma.get(codigo);
             const percentual = hits / palavrasTotais.length;
 
             if (percentual >= percentualMinimo) {
-                const programa = this.mapaPorCodigo.get(codigo);
+                const programa = dadosAno.mapaPorCodigo.get(codigo);
                 const matchedTokens = palavrasTotais.filter(p => tokensFrase.has(p));
 
                 resultados.push({
@@ -203,7 +209,8 @@ class ProgramaService {
             }
         }
 
-        return resultados;
+        }
+        return resultadosFinais;
     }
 }
 

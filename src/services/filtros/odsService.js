@@ -33,36 +33,47 @@ function normalize(text) {
  */
 class OdsService {
 
+    
     constructor() {
-        // Carrega CSV uma única vez
-        this.odsList = this.carregarCsv(caminhoCsv);
+        const anos = ["2024", "2025", "2026"];
+        this.dadosPorAno = {};
+        const pastaBase = path.join(__dirname, "..", "..", "data", "entidades");
 
-        // Índice por código — O(1)
-        this.mapaPorCodigo = new Map(
-            this.odsList.map(o => [o.codigo, o])
-        );
+        for (const ano of anos) {
+            const caminho = path.join(pastaBase, ano, "ods.csv");
+            if (!fs.existsSync(caminho)) {
+                const caminhoPadrao = path.join(pastaBase, "ods.csv");
+                if (fs.existsSync(caminhoPadrao)) {
+                    this._carregarParaAno(ano, caminhoPadrao);
+                }
+                continue;
+            }
+            this._carregarParaAno(ano, caminho);
+        }
+    }
 
-        // Índice invertido por token de descrição — evita loop O(N) na busca
-        // token → [ods, ...]
-        this.indiceDescricao = new Map();
+    _carregarParaAno(ano, caminho) {
+        const odsList = this.carregarCsv(caminho);
+        const mapaPorCodigo = new Map(odsList.map(x => [x.codigo, x]));
+        const indiceDescricao = new Map();
+        const tokensPorOds = new Map();
 
-        // Tokens pré-computados por ODS — usados para calcular o threshold
-        this.tokensPorOds = new Map();
-
-        for (const ods of this.odsList) {
+        for (const ods of odsList) {
             const tokens = normalize(ods.descricao)
                 .split(/\s+/)
                 .filter(p => p.length > 3);
 
-            this.tokensPorOds.set(ods.codigo, tokens);
+            tokensPorOds.set(ods.codigo, tokens);
 
             for (const token of tokens) {
-                if (!this.indiceDescricao.has(token)) {
-                    this.indiceDescricao.set(token, []);
+                if (!indiceDescricao.has(token)) {
+                    indiceDescricao.set(token, []);
                 }
-                this.indiceDescricao.get(token).push(ods);
+                indiceDescricao.get(token).push(ods);
             }
         }
+
+        this.dadosPorAno[ano] = { odsList, mapaPorCodigo, indiceDescricao, tokensPorOds };
     }
 
     /**
@@ -128,9 +139,25 @@ class OdsService {
      * 1. Por código (CONDICIONAL) — O(matches)
      * 2. Por descrição             — O(tokens × hits) via índice invertido
      */
-    extrair(frase) {
-        const resultados = [];
-        const encontrados = new Set();
+    extrair(frase, anosSolicitados = []) {
+        
+        if (!anosSolicitados || anosSolicitados.length === 0) {
+            anosSolicitados = [new Date().getFullYear().toString()];
+        } else {
+            anosSolicitados = anosSolicitados.map(a => a.toString());
+        }
+
+        const resultadosFinais = [];
+        const encontradosGlobais = new Set();
+        
+        for (const ano of anosSolicitados) {
+            const dadosAno = this.dadosPorAno[ano];
+            if (!dadosAno) continue;
+            
+            // Variáveis locais para o algoritmo original
+            const encontrados = encontradosGlobais;
+            const resultados = resultadosFinais;
+
 
         const textoNormalizado = normalize(frase);
 
@@ -153,7 +180,7 @@ class OdsService {
             const codigos = frase.match(/\b\d{1,2}\b/g) || [];
 
             for (const codigo of codigos) {
-                const ods = this.mapaPorCodigo.get(codigo);
+                const ods = dadosAno.mapaPorCodigo.get(codigo);
 
                 if (ods && !encontrados.has(codigo)) {
                     resultados.push({
@@ -179,7 +206,7 @@ class OdsService {
         const contagem = new Map(); // codigo → número de hits
 
         for (const token of tokensFrase) {
-            const candidatos = this.indiceDescricao.get(token);
+            const candidatos = dadosAno.indiceDescricao.get(token);
             if (!candidatos) continue;
 
             for (const ods of candidatos) {
@@ -190,11 +217,11 @@ class OdsService {
 
         // Aplica threshold percentual
         for (const [codigo, hits] of contagem) {
-            const palavrasTotais = this.tokensPorOds.get(codigo);
+            const palavrasTotais = dadosAno.tokensPorOds.get(codigo);
             const percentual = hits / palavrasTotais.length;
 
             if (percentual >= percentualMinimo) {
-                const ods = this.mapaPorCodigo.get(codigo);
+                const ods = dadosAno.mapaPorCodigo.get(codigo);
                 const matchedTokens = palavrasTotais.filter(p => tokensFrase.has(p));
 
                 resultados.push({
@@ -206,7 +233,8 @@ class OdsService {
             }
         }
 
-        return resultados;
+        }
+        return resultadosFinais;
     }
 }
 

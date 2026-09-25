@@ -33,42 +33,47 @@ function normalizarCodigo(codigo) {
 
 class PoderService {
 
+    
     constructor() {
-        // Carrega CSV uma única vez
-        this.poderes = this.carregarCsv(caminhoCsv);
+        const anos = ["2024", "2025", "2026"];
+        this.dadosPorAno = {};
+        const pastaBase = path.join(__dirname, "..", "..", "data", "entidades");
 
-        // Índice por código normalizado — O(1)
-        this.mapaPorCodigo = new Map(
-            this.poderes.map(p => [
-                normalizarCodigo(p.codigo),
-                p
-            ])
-        );
+        for (const ano of anos) {
+            const caminho = path.join(pastaBase, ano, "poder.csv");
+            if (!fs.existsSync(caminho)) {
+                const caminhoPadrao = path.join(pastaBase, "poder.csv");
+                if (fs.existsSync(caminhoPadrao)) {
+                    this._carregarParaAno(ano, caminhoPadrao);
+                }
+                continue;
+            }
+            this._carregarParaAno(ano, caminho);
+        }
+    }
 
-        // Índice invertido por token de descrição — evita loop O(N) na busca
-        // token → [poder, ...]
-        this.indiceDescricao = new Map();
+    _carregarParaAno(ano, caminho) {
+        const poderes = this.carregarCsv(caminho);
+        const mapaPorCodigo = new Map(poderes.map(x => [x.codigo, x]));
+        const indiceDescricao = new Map();
+        const tokensPorPoder = new Map();
 
-        // Tokens pré-computados por poder — usados para calcular o threshold
-        // Chave: normalizarCodigo(poder.codigo) — mesma chave do mapaPorCodigo
-        this.tokensPorPoder = new Map();
-
-        for (const poder of this.poderes) {
-            const codigoNorm = normalizarCodigo(poder.codigo);
-
+        for (const poder of poderes) {
             const tokens = normalize(poder.descricao)
                 .split(/\s+/)
                 .filter(p => p.length > 3);
 
-            this.tokensPorPoder.set(codigoNorm, tokens);
+            tokensPorPoder.set(poder.codigo, tokens);
 
             for (const token of tokens) {
-                if (!this.indiceDescricao.has(token)) {
-                    this.indiceDescricao.set(token, []);
+                if (!indiceDescricao.has(token)) {
+                    indiceDescricao.set(token, []);
                 }
-                this.indiceDescricao.get(token).push(poder);
+                indiceDescricao.get(token).push(poder);
             }
         }
+
+        this.dadosPorAno[ano] = { poderes, mapaPorCodigo, indiceDescricao, tokensPorPoder };
     }
 
     /**
@@ -136,9 +141,25 @@ class PoderService {
      * 1. Por código    — O(matches)
      * 2. Por descrição — O(tokens × hits) via índice invertido
      */
-    extrair(frase) {
-        const resultados = [];
-        const encontrados = new Set();
+    extrair(frase, anosSolicitados = []) {
+        
+        if (!anosSolicitados || anosSolicitados.length === 0) {
+            anosSolicitados = [new Date().getFullYear().toString()];
+        } else {
+            anosSolicitados = anosSolicitados.map(a => a.toString());
+        }
+
+        const resultadosFinais = [];
+        const encontradosGlobais = new Set();
+        
+        for (const ano of anosSolicitados) {
+            const dadosAno = this.dadosPorAno[ano];
+            if (!dadosAno) continue;
+            
+            // Variáveis locais para o algoritmo original
+            const encontrados = encontradosGlobais;
+            const resultados = resultadosFinais;
+
 
         const textoNormalizado = normalize(frase);
 
@@ -158,7 +179,7 @@ class PoderService {
 
         for (const codigoBruto of codigos) {
             const codigoNormalizado = normalizarCodigo(codigoBruto);
-            const poder = this.mapaPorCodigo.get(codigoNormalizado);
+            const poder = dadosAno.mapaPorCodigo.get(codigoNormalizado);
 
             if (poder && !encontrados.has(codigoNormalizado)) {
                 resultados.push({
@@ -183,7 +204,7 @@ class PoderService {
         const contagem = new Map(); // codigoNorm → número de hits
 
         for (const token of tokensFrase) {
-            const candidatos = this.indiceDescricao.get(token);
+            const candidatos = dadosAno.indiceDescricao.get(token);
             if (!candidatos) continue;
 
             for (const poder of candidatos) {
@@ -195,11 +216,11 @@ class PoderService {
 
         // Aplica threshold percentual
         for (const [codigoNorm, hits] of contagem) {
-            const palavrasTotais = this.tokensPorPoder.get(codigoNorm);
+            const palavrasTotais = dadosAno.tokensPorPoder.get(codigoNorm);
             const percentual = hits / palavrasTotais.length;
 
             if (percentual >= percentualMinimo) {
-                const poder = this.mapaPorCodigo.get(codigoNorm);
+                const poder = dadosAno.mapaPorCodigo.get(codigoNorm);
                 const matchedTokens = palavrasTotais.filter(p => tokensFrase.has(p));
 
                 resultados.push({
@@ -211,7 +232,8 @@ class PoderService {
             }
         }
 
-        return resultados;
+        }
+        return resultadosFinais;
     }
 }
 

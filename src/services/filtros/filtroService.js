@@ -112,6 +112,11 @@ class FiltroService {
         const anoFiltro = filtrosEncontrados.ano.length > 0
             ? filtrosEncontrados.ano[0].codigo
             : this.services.ano.getAnoPadrao();
+            
+        // Lista de anos solicitados para as demais entidades
+        const anosSolicitados = filtrosEncontrados.ano.length > 0 
+            ? filtrosEncontrados.ano.map(a => a.codigo) 
+            : [this.services.ano.getAnoPadrao()];
 
         // Monta um Set com todas as entidades que fazem parte de algum grupo paralelo,
         // para excluí-las do loop cascata principal (e também remover o 'ano' que já rodou)
@@ -127,7 +132,7 @@ class FiltroService {
                 const resultadosGrupo = await Promise.all(
                     grupo.map(async entidade => {
                         try {
-                            const resultados = await this.services[entidade].extrair(trecho);
+                            const resultados = await this.services[entidade].extrair(trecho, anosSolicitados);
                             return { entidade, resultados: resultados ?? [] };
                         } catch (error) {
                             console.error(`Erro ao extrair [${entidade}] no trecho "${trecho}":`, error);
@@ -188,7 +193,7 @@ class FiltroService {
                     if (entidade === "periodo") {
                         resultados = await service.extrair(trecho, anoFiltro);
                     } else {
-                        resultados = await service.extrair(trecho);
+                        resultados = await service.extrair(trecho, anosSolicitados);
                     }
 
                     if (resultados && resultados.length > 0) {

@@ -29,36 +29,47 @@ function normalize(text) {
  */
 class GrupoDespesaService {
 
+    
     constructor() {
-        // Carrega o CSV uma única vez ao iniciar o serviço
-        this.grupos = this.carregarCsv(caminhoCsv);
+        const anos = ["2024", "2025", "2026"];
+        this.dadosPorAno = {};
+        const pastaBase = path.join(__dirname, "..", "..", "data", "entidades");
 
-        // Índice por código — O(1)
-        this.mapaPorCodigo = new Map(
-            this.grupos.map(g => [g.codigo, g])
-        );
+        for (const ano of anos) {
+            const caminho = path.join(pastaBase, ano, "grupo_despesa.csv");
+            if (!fs.existsSync(caminho)) {
+                const caminhoPadrao = path.join(pastaBase, "grupo_despesa.csv");
+                if (fs.existsSync(caminhoPadrao)) {
+                    this._carregarParaAno(ano, caminhoPadrao);
+                }
+                continue;
+            }
+            this._carregarParaAno(ano, caminho);
+        }
+    }
 
-        // Índice invertido por token de descrição — evita loop O(N) na busca
-        // token → [grupo, ...]
-        this.indiceDescricao = new Map();
+    _carregarParaAno(ano, caminho) {
+        const grupos = this.carregarCsv(caminho);
+        const mapaPorCodigo = new Map(grupos.map(x => [x.codigo, x]));
+        const indiceDescricao = new Map();
+        const tokensPorGrupo = new Map();
 
-        // Tokens pré-computados por grupo — usados para calcular o threshold
-        this.tokensPorGrupo = new Map();
-
-        for (const grupo of this.grupos) {
+        for (const grupo of grupos) {
             const tokens = normalize(grupo.descricao)
                 .split(/\s+/)
                 .filter(p => p.length > 3);
 
-            this.tokensPorGrupo.set(grupo.codigo, tokens);
+            tokensPorGrupo.set(grupo.codigo, tokens);
 
             for (const token of tokens) {
-                if (!this.indiceDescricao.has(token)) {
-                    this.indiceDescricao.set(token, []);
+                if (!indiceDescricao.has(token)) {
+                    indiceDescricao.set(token, []);
                 }
-                this.indiceDescricao.get(token).push(grupo);
+                indiceDescricao.get(token).push(grupo);
             }
         }
+
+        this.dadosPorAno[ano] = { grupos, mapaPorCodigo, indiceDescricao, tokensPorGrupo };
     }
 
     /**
@@ -123,7 +134,7 @@ class GrupoDespesaService {
      * 2. Por código      — O(matches)
      * 3. Por descrição  — O(tokens × hits) via índice invertido
      */
-    extrair(frase) {
+    extrair(frase, anosSolicitados = []) {
         const textoNormalizado = normalize(frase);
 
         // ─────────────────────────────────────────
@@ -133,8 +144,24 @@ class GrupoDespesaService {
             return [];
         }
 
-        const resultados = [];
-        const encontrados = new Set();
+        
+        if (!anosSolicitados || anosSolicitados.length === 0) {
+            anosSolicitados = [new Date().getFullYear().toString()];
+        } else {
+            anosSolicitados = anosSolicitados.map(a => a.toString());
+        }
+
+        const resultadosFinais = [];
+        const encontradosGlobais = new Set();
+        
+        for (const ano of anosSolicitados) {
+            const dadosAno = this.dadosPorAno[ano];
+            if (!dadosAno) continue;
+            
+            // Variáveis locais para o algoritmo original
+            const encontrados = encontradosGlobais;
+            const resultados = resultadosFinais;
+
 
         // ─────────────────────────────────────────
         // 1️⃣  BUSCA POR CÓDIGO
@@ -143,7 +170,7 @@ class GrupoDespesaService {
         const codigos = frase.match(/\b\d\b/g) || [];
 
         for (const codigo of codigos) {
-            const grupo = this.mapaPorCodigo.get(codigo);
+            const grupo = dadosAno.mapaPorCodigo.get(codigo);
 
             if (grupo && !encontrados.has(codigo)) {
                 resultados.push({
@@ -168,7 +195,7 @@ class GrupoDespesaService {
         const contagem = new Map(); // codigo → número de hits
 
         for (const token of tokensFrase) {
-            const candidatos = this.indiceDescricao.get(token);
+            const candidatos = dadosAno.indiceDescricao.get(token);
             if (!candidatos) continue;
 
             for (const grupo of candidatos) {
@@ -179,11 +206,11 @@ class GrupoDespesaService {
 
         // Aplica threshold de 60%
         for (const [codigo, hits] of contagem) {
-            const palavrasTotais = this.tokensPorGrupo.get(codigo);
+            const palavrasTotais = dadosAno.tokensPorGrupo.get(codigo);
             const percentual = hits / palavrasTotais.length;
 
             if (percentual >= PERCENTUAL_PADRAO) {
-                const grupo = this.mapaPorCodigo.get(codigo);
+                const grupo = dadosAno.mapaPorCodigo.get(codigo);
                 const matchedTokens = palavrasTotais.filter(p => tokensFrase.has(p));
 
                 resultados.push({
@@ -195,7 +222,8 @@ class GrupoDespesaService {
             }
         }
 
-        return resultados;
+        }
+        return resultadosFinais;
     }
 }
 
