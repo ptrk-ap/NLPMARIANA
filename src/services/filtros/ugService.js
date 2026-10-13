@@ -99,6 +99,7 @@ class UnidadeGestoraService {
     _carregarParaAno(ano, caminho) {
         const unidades = this.carregarCsv(caminho);
         const mapaPorCodigo = new Map(unidades.map(x => [x.codigo, x]));
+        const mapaPorMnemonico = new Map(unidades.map(x => [normalize(x.mnemonico), x]));
         const indiceDescricao = new Map();
         const tokensPorUnidade = new Map();
 
@@ -117,7 +118,7 @@ class UnidadeGestoraService {
             }
         }
 
-        this.dadosPorAno[ano] = { unidades, mapaPorCodigo, indiceDescricao, tokensPorUnidade };
+        this.dadosPorAno[ano] = { unidades, mapaPorCodigo, mapaPorMnemonico, indiceDescricao, tokensPorUnidade };
     }
 
     /**
@@ -235,7 +236,7 @@ class UnidadeGestoraService {
         const tokens = textoNormalizado.split(/\s+/);
 
         for (const token of tokens) {
-            const unidade = this.mapaPorMnemonico.get(token);
+            const unidade = dadosAno.mapaPorMnemonico ? dadosAno.mapaPorMnemonico.get(token) : null;
             if (unidade && !encontrados.has(unidade.codigo)) {
                 resultados.push({
                     codigo: unidade.codigo,
