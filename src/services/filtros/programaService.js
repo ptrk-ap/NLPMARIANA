@@ -67,6 +67,32 @@ class ProgramaService {
     }
 
     /**
+     * Lê o CSV e transforma em objetos
+     */
+    carregarCsv(caminho) {
+        const conteudo = fs.readFileSync(caminho, "utf8");
+
+        return conteudo
+            .split(/\r?\n/)
+            .filter(Boolean)
+            .slice(1) // remove cabeçalho
+            .map(linha => {
+                const [codigo, descricao] = linha.split(",");
+
+                return {
+                    codigo: (codigo || "").trim(),
+                    descricao: (descricao || "").trim()
+                };
+            })
+            .filter(item =>
+                item.codigo &&
+                item.descricao &&
+                item.codigo !== "-" &&
+                item.descricao !== "-"
+            );
+    }
+
+    /**
      * Encontra o menor trecho contíguo da frase original que abrange
      * as palavras-chave encontradas.
      *

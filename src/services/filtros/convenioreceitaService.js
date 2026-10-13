@@ -10,6 +10,14 @@ const caminhoCsv = path.join(__dirname, "..", "..", "data", "entidades", "conven
  * ESTRATÉGIA: puramente por código (6 dígitos exatos).
  * Já otimizado: Map O(1) + trigger "convenio_receita".
  */
+function normalize(text) {
+    return text
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+}
+
 class ConvenioReceitaService {
 
     
