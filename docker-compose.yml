@@ -7,20 +7,20 @@ services:
       dockerfile: Dockerfile
     container_name: nlpmariana_app
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - "${PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT}
-      - DB_USER=${DB_USER}
-      - DB_PASS=${DB_PASS}
-      - DB_NAME=${DB_NAME}
+      - PORT=3000
+      - DATABASE_URL=postgresql://${DB_USER:-mariana}:${DB_PASS:-123456}@db:5432/${DB_NAME:-principal}
+      - API_USERNAME=${API_USERNAME}
+      - API_PASSWORD=${API_PASSWORD}
+      - TRIGGER_USERNAME=${TRIGGER_USERNAME}
+      - TRIGGER_PASSWORD=${TRIGGER_PASSWORD}
+      - DB_SSL=${DB_SSL:-false}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: unless-stopped
-    # Se precisar mapear logs ou arquivos locais, use volumes aqui
-    # volumes:
-    #   - ./logs:/app/logs
 
   db:
     image: postgres:15-alpine
@@ -28,12 +28,18 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASS}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER:-mariana}
+      POSTGRES_PASSWORD: ${DB_PASS:-123456}
+      POSTGRES_DB: ${DB_NAME:-principal}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-mariana} -d ${DB_NAME:-principal}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
 volumes:
   postgres_data:
+
