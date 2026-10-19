@@ -3,10 +3,10 @@ const path = require("path");
 const caminhoCsv = path.join(__dirname, "..", "..", "data", "entidades", "unidade_gestora.csv");
 const { resolverPercentualMinimo } = require("../../utils/sensibilidadeMatcher");
 
-const PERCENTUAL_PADRAO = 0.9;
+const PERCENTUAL_PADRAO = 0.6;
 
 const REGRAS_SENSIBILIDADE = [
-    { palavra: "unidade_gestora", percentual: 0.6 }
+    { palavra: "unidade_gestora", percentual: 0.5 }
 ];
 
 /**
@@ -14,7 +14,8 @@ const REGRAS_SENSIBILIDADE = [
  */
 const STOPWORDS = new Set([
     "estado",
-    "estadual"
+    "estadual",
+    "amapa"
 ]);
 
 /**
@@ -77,7 +78,7 @@ function parseCsvLinha(linha) {
 
 class UnidadeGestoraService {
 
-    
+
     constructor() {
         const anos = ["2024", "2025", "2026"];
         this.dadosPorAno = {};
@@ -104,7 +105,7 @@ class UnidadeGestoraService {
         const tokensPorUnidade = new Map();
 
         for (const unidade of unidades) {
-            const tokens = normalize(unidade.descricao)
+            const tokens = removeStopwords(normalize(unidade.descricao))
                 .split(/\s+/)
                 .filter(p => p.length > 3);
 
@@ -185,7 +186,7 @@ class UnidadeGestoraService {
      * 3. Por descrição  — O(tokens × hits) via índice invertido com threshold dinâmico
      */
     extrair(frase, anosSolicitados = []) {
-        
+
         if (!anosSolicitados || anosSolicitados.length === 0) {
             anosSolicitados = [new Date().getFullYear().toString()];
         } else {
@@ -194,98 +195,98 @@ class UnidadeGestoraService {
 
         const resultadosFinais = [];
         const encontradosGlobais = new Set();
-        
+
         for (const ano of anosSolicitados) {
             const dadosAno = this.dadosPorAno[ano];
             if (!dadosAno) continue;
-            
+
             // Variáveis locais para o algoritmo original
             const encontrados = encontradosGlobais;
             const resultados = resultadosFinais;
 
 
-        const textoNormalizado = removeStopwords(normalize(frase));
+            const textoNormalizado = removeStopwords(normalize(frase));
 
-        // Define o percentual mínimo com base na presença das palavras de sensibilidade
-        const percentualMinimo = resolverPercentualMinimo(
-            textoNormalizado,
-            PERCENTUAL_PADRAO,
-            REGRAS_SENSIBILIDADE
-        );
+            // Define o percentual mínimo com base na presença das palavras de sensibilidade
+            const percentualMinimo = resolverPercentualMinimo(
+                textoNormalizado,
+                PERCENTUAL_PADRAO,
+                REGRAS_SENSIBILIDADE
+            );
 
-        // ─────────────────────────────────────────
-        // 1️⃣  BUSCA POR CÓDIGO
-        // ─────────────────────────────────────────
-        const codigos = frase.match(REGEX_CODIGO_FRASE) || [];
+            // ─────────────────────────────────────────
+            // 1️⃣  BUSCA POR CÓDIGO
+            // ─────────────────────────────────────────
+            const codigos = frase.match(REGEX_CODIGO_FRASE) || [];
 
-        for (const codigo of codigos) {
-            const unidade = dadosAno.mapaPorCodigo.get(codigo);
-            if (unidade && !encontrados.has(codigo)) {
-                resultados.push({
-                    codigo: unidade.codigo,
-                    descricao: unidade.descricao,
-                    trecho_encontrado: codigo
-                });
-                encontrados.add(codigo);
-            }
-        }
-
-        // ─────────────────────────────────────────
-        // 2️⃣  BUSCA POR MNEMÔNICO
-        // ─────────────────────────────────────────
-        const tokens = textoNormalizado.split(/\s+/);
-
-        for (const token of tokens) {
-            const unidade = dadosAno.mapaPorMnemonico ? dadosAno.mapaPorMnemonico.get(token) : null;
-            if (unidade && !encontrados.has(unidade.codigo)) {
-                resultados.push({
-                    codigo: unidade.codigo,
-                    descricao: unidade.descricao,
-                    trecho_encontrado: token
-                });
-                encontrados.add(unidade.codigo);
-            }
-        }
-
-        // ─────────────────────────────────────────
-        // 3️⃣  BUSCA POR DESCRIÇÃO via índice invertido
-        // ─────────────────────────────────────────
-
-        // Conjunto de tokens relevantes da frase (len > 3)
-        const tokensFrase = new Set(
-            textoNormalizado.split(/\s+/).filter(p => p.length > 3)
-        );
-
-        // Conta quantos tokens de cada unidade aparecem na frase
-        const contagem = new Map(); // codigo → número de hits
-
-        for (const token of tokensFrase) {
-            const candidatos = dadosAno.indiceDescricao.get(token);
-            if (!candidatos) continue;
-
-            for (const unidade of candidatos) {
-                if (encontrados.has(unidade.codigo)) continue;
-                contagem.set(unidade.codigo, (contagem.get(unidade.codigo) || 0) + 1);
-            }
-        }
-
-        // Aplica threshold percentual dinâmico sobre os tokens da descrição
-        for (const [codigo, hits] of contagem) {
-            const palavrasTotais = dadosAno.tokensPorUnidade.get(codigo);
-            const percentual = hits / palavrasTotais.length;
-
-            if (percentual >= percentualMinimo) {
+            for (const codigo of codigos) {
                 const unidade = dadosAno.mapaPorCodigo.get(codigo);
-                const matchedTokens = palavrasTotais.filter(p => tokensFrase.has(p));
-
-                resultados.push({
-                    codigo: unidade.codigo,
-                    descricao: unidade.descricao,
-                    trecho_encontrado: this._extrairTrechoDescricao(frase, matchedTokens)
-                });
-                encontrados.add(codigo);
+                if (unidade && !encontrados.has(codigo)) {
+                    resultados.push({
+                        codigo: unidade.codigo,
+                        descricao: unidade.descricao,
+                        trecho_encontrado: codigo
+                    });
+                    encontrados.add(codigo);
+                }
             }
-        }
+
+            // ─────────────────────────────────────────
+            // 2️⃣  BUSCA POR MNEMÔNICO
+            // ─────────────────────────────────────────
+            const tokens = textoNormalizado.split(/\s+/);
+
+            for (const token of tokens) {
+                const unidade = dadosAno.mapaPorMnemonico ? dadosAno.mapaPorMnemonico.get(token) : null;
+                if (unidade && !encontrados.has(unidade.codigo)) {
+                    resultados.push({
+                        codigo: unidade.codigo,
+                        descricao: unidade.descricao,
+                        trecho_encontrado: token
+                    });
+                    encontrados.add(unidade.codigo);
+                }
+            }
+
+            // ─────────────────────────────────────────
+            // 3️⃣  BUSCA POR DESCRIÇÃO via índice invertido
+            // ─────────────────────────────────────────
+
+            // Conjunto de tokens relevantes da frase (len > 3)
+            const tokensFrase = new Set(
+                textoNormalizado.split(/\s+/).filter(p => p.length > 3)
+            );
+
+            // Conta quantos tokens de cada unidade aparecem na frase
+            const contagem = new Map(); // codigo → número de hits
+
+            for (const token of tokensFrase) {
+                const candidatos = dadosAno.indiceDescricao.get(token);
+                if (!candidatos) continue;
+
+                for (const unidade of candidatos) {
+                    if (encontrados.has(unidade.codigo)) continue;
+                    contagem.set(unidade.codigo, (contagem.get(unidade.codigo) || 0) + 1);
+                }
+            }
+
+            // Aplica threshold percentual dinâmico sobre os tokens da descrição
+            for (const [codigo, hits] of contagem) {
+                const palavrasTotais = dadosAno.tokensPorUnidade.get(codigo);
+                const percentual = hits / palavrasTotais.length;
+
+                if (percentual >= percentualMinimo) {
+                    const unidade = dadosAno.mapaPorCodigo.get(codigo);
+                    const matchedTokens = palavrasTotais.filter(p => tokensFrase.has(p));
+
+                    resultados.push({
+                        codigo: unidade.codigo,
+                        descricao: unidade.descricao,
+                        trecho_encontrado: this._extrairTrechoDescricao(frase, matchedTokens)
+                    });
+                    encontrados.add(codigo);
+                }
+            }
 
         }
         return resultadosFinais;

@@ -45,56 +45,39 @@ npm run dev
 
 | Método | Rota | Finalidade |
 | --- | --- | --- |
-| `GET` | `/health` | Verifica a disponibilidade da API e do banco. |
-| `POST` | `/consultar` | Executa uma consulta em linguagem natural. |
-| `POST` | `/admin/*` | Executa rotinas administrativas de carga e manutenção. |
+| `GET` | `/health` | Verifica a disponibilidade da API e a conectividade com o banco. |
+| `POST` | `/consultar` | Processa e executa uma consulta orçamentária em linguagem natural. |
+| `POST` | `/admin/*` | Executa rotinas administrativas de carga e manutenção de dados. |
+
+### Exemplo de consulta (`POST /consultar`)
+
+Envie um JSON contendo o campo `frase` (limite de 200 caracteres):
+
+```json
+{
+  "frase": "empenhado na Secretaria de cultura em 2026"
+}
+```
+
+A consulta deve conter pelo menos uma métrica de valor orçamentário (empenhado, liquidado, pago ou dotação) e opcionalmente dimensões/filtros como ano, órgão, etc.
+
+## Motor de NLP e Filtros de Entidades
+
+O sistema converte consultas em linguagem natural em queries SQL otimizadas sobre as tabelas do SIAFIC.
+
+### Dimensões e Entidades Suportadas
+
+- **Valores/Métricas:** Dotação inicial, dotação atualizada, despesas empenhadas, liquidadas e pagas.
+- **Unidade Gestora (UG):** Reconhecimento por código (ex: `380101`), mnemônico/sigla (ex: `SECULT`, `SEED`, `SEFAZ`) ou descrição textual (ex: *"Secretaria de Cultura"*, *"Polícia Militar"*).
+  - Inclui tratamento de *stopwords* institucionais (`estado`, `estadual`, `amapa`).
+  - Utiliza threshold dinâmico com regras de sensibilidade para termos técnicos.
+- **Unidade Orçamentária (UO):** Suporte a códigos e descrições das UOs.
+- **Exercício e Período:** Suporte a anos (ex: `2024`, `2025`, `2026`), intervalos cronológicos e datas específicas.
+- **Classificações Orçamentárias:** Função, Programa, Ação, Fonte de Recursos, Grupo de Despesa, Elemento e Natureza da Despesa.
+- **Instrumentos e Parceiros:** Contratos, Convênios (despesa e receita), Emendas parlamentares e Credores (com suporte a CPF/CNPJ e busca fonética/textual).
+- **Regras de Exclusão:** Suporte a termos negativos (ex: *"sem convênios"*, *"exceto saúde"*).
 
 Proteja as rotas administrativas no proxy reverso ou no próprio aplicativo antes de expô-las à internet.
-
-## Produção com PM2
-
-Instale as dependências da aplicação:
-
-```bash
-npm ci --omit=dev
-```
-
-Inicie o serviço com o perfil de produção:
-
-```bash
-pm2 start ecosystem.config.js --env production
-pm2.cmd start ecosystem.config.js --env production
-```
-
-O processo registrado chama-se `portal-web`. A configuração inicia três instâncias em cluster, reinicia processos que falhem e limita cada processo a 500 MB de memória.
-
-Após confirmar que o serviço iniciou corretamente, registre o estado atual do PM2:
-
-```bash
-pm2 save
-```
-
-Para recarregar após alterações de código ou de ambiente:
-
-```bash
-pm2 reload ecosystem.config.js --env production --update-env
-```
-
-## Logs e operação
-
-Os logs são mantidos pelo PM2 em `~/.pm2/logs` no usuário que executa o serviço. Habilite a rotação uma vez por servidor:
-
-```bash
-pm2 install pm2-logrotate
-```
-
-Comandos úteis:
-
-```bash
-pm2 status
-pm2 logs portal-web
-pm2 monit
-```
 
 ## Proxy reverso
 
