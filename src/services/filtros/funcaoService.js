@@ -78,7 +78,9 @@ class FuncaoService {
             .filter(Boolean)
             .slice(1)
             .map(linha => {
-                const [codigo, descricao] = linha.split(",");
+                const partes = linha.split(",");
+                const codigo = partes[0];
+                const descricao = partes.slice(1).join(",").replace(/^"|"$/g, "");
 
                 return {
                     codigo: (codigo || "").trim(),
